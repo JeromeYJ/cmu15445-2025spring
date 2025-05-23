@@ -29,7 +29,7 @@ class HyperLogLog {
   /**
    * @brief Getter value for cardinality.
    *
-   * @returns cardinality value
+   * @returns cardinality value（基数）
    */
   auto GetCardinality() { return cardinality_; }
 
@@ -83,6 +83,12 @@ class HyperLogLog {
   size_t cardinality_;
 
   /** @todo (student) can add their data structures that support HyperLogLog */
+
+  /** @brief 前置位数. */
+  int b_;
+
+  /** @brief buckets */
+  std::vector<uint64_t> buckets_;
 };
 
 }  // namespace bustub
