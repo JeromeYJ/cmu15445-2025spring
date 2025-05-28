@@ -16,7 +16,7 @@
 
 namespace bustub {
 
-TEST(LRUKReplacerTest, DISABLED_SampleTest) {
+TEST(LRUKReplacerTest, SampleTest) {
   // Note that comparison with `std::nullopt` always results in `false`, and if the optional type actually does contain
   // a value, the comparison will compare the inner value.
   // See: https://devblogs.microsoft.com/oldnewthing/20211004-00/?p=105754
@@ -117,6 +117,36 @@ TEST(LRUKReplacerTest, DISABLED_SampleTest) {
   // Make sure that setting a non-existent frame as evictable or non-evictable doesn't do something strange.
   lru_replacer.SetEvictable(6, false);
   lru_replacer.SetEvictable(6, true);
+}
+
+TEST(LRUKReplacerTest, AntiO2) {
+  LRUKReplacer lru_replacer(3, 3);
+  ASSERT_EQ(lru_replacer.Size(), 0);
+  lru_replacer.RecordAccess(1);
+  lru_replacer.RecordAccess(1);
+  lru_replacer.RecordAccess(1);
+  lru_replacer.RecordAccess(2);
+  lru_replacer.RecordAccess(2);
+  lru_replacer.RecordAccess(2);
+  lru_replacer.RecordAccess(1);
+  lru_replacer.SetEvictable(1, true);
+  lru_replacer.SetEvictable(2, true);
+  ASSERT_EQ(lru_replacer.Size(), 2);
+  lru_replacer.RecordAccess(3);
+  lru_replacer.SetEvictable(3, true);
+  ASSERT_EQ(lru_replacer.Evict(), 3);
+  EXPECT_EQ(lru_replacer.Evict(), 1);
+
+  lru_replacer.RecordAccess(1);
+  lru_replacer.SetEvictable(1, true);
+  lru_replacer.RecordAccess(3);
+  lru_replacer.SetEvictable(3, true);
+  lru_replacer.RecordAccess(1);
+  EXPECT_EQ(lru_replacer.Evict(), 1);
+  lru_replacer.RecordAccess(3);
+  lru_replacer.RecordAccess(3);
+  EXPECT_EQ(lru_replacer.Evict(), 2);
+  EXPECT_EQ(lru_replacer.Evict(), 3);
 }
 
 }  // namespace bustub

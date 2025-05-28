@@ -27,14 +27,19 @@ namespace bustub {
 enum class AccessType { Unknown = 0, Lookup, Scan, Index };
 
 class LRUKNode {
+  friend class LRUKReplacer;
+
  private:
   /** History of last seen K timestamps of this page. Least recent timestamp stored in front. */
   // Remove maybe_unused if you start using them. Feel free to change the member variables as you want.
 
-  [[maybe_unused]] std::list<size_t> history_;
+  std::list<size_t> history_;
   [[maybe_unused]] size_t k_;
   [[maybe_unused]] frame_id_t fid_;
-  [[maybe_unused]] bool is_evictable_{false};
+  bool is_evictable_{false};
+
+ public:
+  // LRUKNode() :
 };
 
 /**
@@ -115,6 +120,8 @@ class LRUKReplacer {
    *
    * For other scenarios, this function should terminate without modifying anything.
    *
+   * 个人理解是，与lru中unpin、pin类似，evictable frame为unpinned frame，即没有线程正在访问该frame，可以被替换
+   *
    * @param frame_id id of frame whose 'evictable' status will be modified
    * @param set_evictable whether the given frame is evictable or not
    */
@@ -151,12 +158,18 @@ class LRUKReplacer {
  private:
   // TODO(student): implement me! You can replace these member variables as you like.
   // Remove maybe_unused if you start using them.
-  [[maybe_unused]] std::unordered_map<frame_id_t, LRUKNode> node_store_;
-  [[maybe_unused]] size_t current_timestamp_{0};
-  [[maybe_unused]] size_t curr_size_{0};
-  [[maybe_unused]] size_t replacer_size_;
-  [[maybe_unused]] size_t k_;
-  [[maybe_unused]] std::mutex latch_;
+  std::unordered_map<frame_id_t, LRUKNode> node_store_;
+  size_t current_timestamp_{0};
+  size_t curr_size_{0};
+  size_t replacer_size_;
+  size_t k_;
+  std::mutex latch_;
+
+  // list在插入删除时其他元素不会有迭代器失效、变化的情况，所以可以使用迭代器做哈希表的值来优化查找
+  std::list<frame_id_t> new_frames_;  // 没有达到k个历史引用的frame的list
+  std::unordered_map<frame_id_t, std::list<frame_id_t>::iterator> new_frames_locator_;  // 加速定位的哈希表
+  std::list<frame_id_t> cache_frames_;  // 有k个历史引用的frame的list
+  std::unordered_map<frame_id_t, std::list<frame_id_t>::iterator> cache_frames_locator_;  // 加速定位的哈希表
 };
 
 }  // namespace bustub
