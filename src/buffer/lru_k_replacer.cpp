@@ -18,7 +18,7 @@ namespace bustub {
 LRUKReplacer::LRUKReplacer(size_t num_frames, size_t k) : replacer_size_(num_frames), k_(k) {}
 
 auto LRUKReplacer::Evict() -> std::optional<frame_id_t> {
-  std::unique_lock lk(latch_);
+  std::unique_lock<std::mutex> lk(latch_);
   // 先看未达到k个历史引用的frame
   if (!new_frames_.empty()) {
     // 使用反向迭代器进行反向遍历
@@ -54,7 +54,7 @@ auto LRUKReplacer::Evict() -> std::optional<frame_id_t> {
 }
 
 void LRUKReplacer::RecordAccess(frame_id_t frame_id, AccessType access_type) {
-  std::unique_lock lk(latch_);
+  std::unique_lock<std::mutex> lk(latch_);
   if (frame_id > static_cast<int>(replacer_size_)) {
     throw std::runtime_error(std::to_string(frame_id) +
                              " is larger than replacer_size :" + std::to_string(replacer_size_));
@@ -116,7 +116,7 @@ void LRUKReplacer::RecordAccess(frame_id_t frame_id, AccessType access_type) {
 }
 
 void LRUKReplacer::SetEvictable(frame_id_t frame_id, bool set_evictable) {
-  std::unique_lock lk(latch_);
+  std::unique_lock<std::mutex> lk(latch_);
   if (node_store_.find(frame_id) == node_store_.end()) {
     return;
   }
@@ -134,7 +134,7 @@ void LRUKReplacer::SetEvictable(frame_id_t frame_id, bool set_evictable) {
 }
 
 void LRUKReplacer::Remove(frame_id_t frame_id) {
-  std::unique_lock lk(latch_);
+  std::unique_lock<std::mutex> lk(latch_);
   if (node_store_.find(frame_id) == node_store_.end()) {
     return;
   }
@@ -155,7 +155,7 @@ void LRUKReplacer::Remove(frame_id_t frame_id) {
 }
 
 auto LRUKReplacer::Size() -> size_t {
-  std::unique_lock lk(latch_);
+  std::unique_lock<std::mutex> lk(latch_);
   return curr_size_;
 }
 

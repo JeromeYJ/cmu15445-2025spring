@@ -47,6 +47,7 @@ class Channel {
     std::unique_lock<std::mutex> lk(m_);
     cv_.wait(lk, [&]() { return !q_.empty(); });
     T element = std::move(q_.front());
+    // move只是资源所有权的转移，不是直接对象的移动，所以之后还要弹出销毁对象
     q_.pop();
     return element;
   }
