@@ -25,11 +25,29 @@ namespace bustub {
  * @param frame A shared pointer to the frame that holds the page we want to protect.
  * @param replacer A shared pointer to the buffer pool manager's replacer.
  * @param bpm_latch A shared pointer to the buffer pool manager's latch.
+ *
+ * 这里的shared_ptr指向对象的引用计数要结合实参、形参好好思考一下，外界调用这个函数shared_ptr类参数不要用move，直接拷贝
+ * 不然buffer pool manager对象中的replacer_、bpm_latch_会失去资源所有权
+ *
+ * 这里要注意：构造函数列表初始化的顺序由声明顺序决定，成员变量按照它们在类定义中出现的顺序依次初始化。
+ * 与初始化列表顺序无关！即使在构造函数初始化列表中调换了顺序，实际初始化仍按声明顺序进行。
+ * 这里的lk初始化需要注意，不要用形参frame访问rwlock，不然会出现用空指针访问rwlock的情况
+ * 而应该使用已经初始化的frame_
  */
 ReadPageGuard::ReadPageGuard(page_id_t page_id, std::shared_ptr<FrameHeader> frame,
                              std::shared_ptr<LRUKReplacer> replacer, std::shared_ptr<std::mutex> bpm_latch)
-    : page_id_(page_id), frame_(std::move(frame)), replacer_(std::move(replacer)), bpm_latch_(std::move(bpm_latch)) {
-  UNIMPLEMENTED("TODO(P1): Add implementation.");
+    : page_id_(page_id),
+      frame_(std::move(frame)),
+      replacer_(std::move(replacer)),
+      bpm_latch_(std::move(bpm_latch)),
+      is_valid_(true) {
+  frame_->rwlatch_.lock_shared();
+  frame_->pin_count_++;
+  frame_->page_id_ = page_id;
+  // 记得更新 replacer_ 中 LRU-K 历史信息
+  // 这个更新的位置要在这里，在外面会出现还没有访问到该页面，就修改了replacer_中LRU-K队列的情况
+  replacer_->RecordAccess(frame_->frame_id_);
+  replacer_->SetEvictable(frame_->frame_id_, false);
 }
 
 /**
@@ -46,8 +64,23 @@ ReadPageGuard::ReadPageGuard(page_id_t page_id, std::shared_ptr<FrameHeader> fra
  * TODO(P1): Add implementation.
  *
  * @param that The other page guard.
+ *
+ * 可以在拷贝/移动构造函数中访问同类对象私有成员
+ * 该机制方便拷贝/移动操作
  */
-ReadPageGuard::ReadPageGuard(ReadPageGuard &&that) noexcept {}
+ReadPageGuard::ReadPageGuard(ReadPageGuard &&that) noexcept {
+  if (this == &that) {
+    return;
+  }
+  Drop();  // 这一行容易漏，是在vector的erase函数test中发现的问题，很难找到
+  page_id_ = that.page_id_;
+  frame_ = std::move(that.frame_);
+  replacer_ = std::move(that.replacer_);
+  bpm_latch_ = std::move(that.bpm_latch_);
+  is_valid_ = that.is_valid_;
+  that.is_valid_ = false;
+  replacer_->SetEvictable(frame_->frame_id_, false);
+}
 
 /**
  * @brief The move assignment operator for `ReadPageGuard`.
@@ -66,7 +99,22 @@ ReadPageGuard::ReadPageGuard(ReadPageGuard &&that) noexcept {}
  * @param that The other page guard.
  * @return ReadPageGuard& The newly valid `ReadPageGuard`.
  */
-auto ReadPageGuard::operator=(ReadPageGuard &&that) noexcept -> ReadPageGuard & { return *this; }
+auto ReadPageGuard::operator=(ReadPageGuard &&that) noexcept -> ReadPageGuard & {
+  // 单纯因为测试用例过不了加的，个人觉得test case设计不太好
+  // 很难出现要用自己移动构造自己的情况
+  if (this == &that) {
+    return *this;
+  }
+  Drop();  // 这一行容易漏，是在vector的erase函数test中发现的问题，很难找到
+  page_id_ = that.page_id_;
+  frame_ = std::move(that.frame_);
+  replacer_ = std::move(that.replacer_);
+  bpm_latch_ = std::move(that.bpm_latch_);
+  is_valid_ = that.is_valid_;
+  that.is_valid_ = false;
+  replacer_->SetEvictable(frame_->frame_id_, false);
+  return *this;
+}
 
 /**
  * @brief Gets the page ID of the page this guard is protecting.
@@ -103,7 +151,24 @@ auto ReadPageGuard::IsDirty() const -> bool {
  *
  * TODO(P1): Add implementation.
  */
-void ReadPageGuard::Drop() { UNIMPLEMENTED("TODO(P1): Add implementation."); }
+void ReadPageGuard::Drop() {
+  if (!is_valid_) {
+    return;
+  }
+
+  // bpm_latch_->lock();
+  frame_->pin_count_--;
+  if (frame_->pin_count_.load() == 0) {
+    replacer_->SetEvictable(frame_->frame_id_, true);
+  }
+  // bpm_latch_->unlock();
+  frame_->rwlatch_.unlock_shared();
+  is_valid_ = false;
+  replacer_ = nullptr;
+  frame_ = nullptr;
+  // TODO(Jerome): bpm_latch_的操作
+  // 可能是为了可以操作replacer_? 需要解锁之类的？
+}
 
 /** @brief The destructor for `ReadPageGuard`. This destructor simply calls `Drop()`. */
 ReadPageGuard::~ReadPageGuard() { Drop(); }
@@ -126,8 +191,17 @@ ReadPageGuard::~ReadPageGuard() { Drop(); }
  */
 WritePageGuard::WritePageGuard(page_id_t page_id, std::shared_ptr<FrameHeader> frame,
                                std::shared_ptr<LRUKReplacer> replacer, std::shared_ptr<std::mutex> bpm_latch)
-    : page_id_(page_id), frame_(std::move(frame)), replacer_(std::move(replacer)), bpm_latch_(std::move(bpm_latch)) {
-  UNIMPLEMENTED("TODO(P1): Add implementation.");
+    : page_id_(page_id),
+      frame_(std::move(frame)),
+      replacer_(std::move(replacer)),
+      bpm_latch_(std::move(bpm_latch)),
+      is_valid_(true) {
+  frame_->rwlatch_.lock();
+  frame_->pin_count_++;
+  frame_->is_dirty_ = true;
+  frame_->page_id_ = page_id;
+  replacer_->RecordAccess(frame_->frame_id_);
+  replacer_->SetEvictable(frame_->frame_id_, false);
 }
 
 /**
@@ -145,7 +219,19 @@ WritePageGuard::WritePageGuard(page_id_t page_id, std::shared_ptr<FrameHeader> f
  *
  * @param that The other page guard.
  */
-WritePageGuard::WritePageGuard(WritePageGuard &&that) noexcept {}
+WritePageGuard::WritePageGuard(WritePageGuard &&that) noexcept {
+  if (this == &that) {
+    return;
+  }
+  Drop();  // 这一行容易漏，是在vector的erase函数test中发现的问题，很难找到
+  page_id_ = that.page_id_;
+  frame_ = std::move(that.frame_);
+  replacer_ = std::move(that.replacer_);
+  bpm_latch_ = std::move(that.bpm_latch_);
+  is_valid_ = that.is_valid_;
+  that.is_valid_ = false;
+  replacer_->SetEvictable(frame_->frame_id_, false);
+}
 
 /**
  * @brief The move assignment operator for `WritePageGuard`.
@@ -164,7 +250,20 @@ WritePageGuard::WritePageGuard(WritePageGuard &&that) noexcept {}
  * @param that The other page guard.
  * @return WritePageGuard& The newly valid `WritePageGuard`.
  */
-auto WritePageGuard::operator=(WritePageGuard &&that) noexcept -> WritePageGuard & { return *this; }
+auto WritePageGuard::operator=(WritePageGuard &&that) noexcept -> WritePageGuard & {
+  if (this == &that) {
+    return *this;
+  }
+  Drop();  // 这一行容易漏，是在vector的erase函数test中发现的问题，很难找到
+  page_id_ = that.page_id_;
+  frame_ = std::move(that.frame_);
+  replacer_ = std::move(that.replacer_);
+  bpm_latch_ = std::move(that.bpm_latch_);
+  is_valid_ = that.is_valid_;
+  that.is_valid_ = false;
+  replacer_->SetEvictable(frame_->frame_id_, false);
+  return *this;
+}
 
 /**
  * @brief Gets the page ID of the page this guard is protecting.
@@ -208,8 +307,28 @@ auto WritePageGuard::IsDirty() const -> bool {
  * Gradescope tests. You may also want to take the buffer pool manager's latch in a very specific scenario...
  *
  * TODO(P1): Add implementation.
+ *
+ *
  */
-void WritePageGuard::Drop() { UNIMPLEMENTED("TODO(P1): Add implementation."); }
+void WritePageGuard::Drop() {
+  if (!is_valid_) {
+    return;
+  }
+
+  // bpm_latch_->lock();
+  //  frame_->pin_count_.store(0);
+  frame_->pin_count_--;
+  if (frame_->pin_count_.load() == 0) {
+    replacer_->SetEvictable(frame_->frame_id_, true);
+  }
+  // bpm_latch_->unlock();
+  frame_->rwlatch_.unlock();
+  is_valid_ = false;
+  replacer_ = nullptr;
+  frame_ = nullptr;
+  // TODO(Jerome): bpm_latch_的操作
+  // 可能是为了可以操作replacer_? 需要解锁之类的?
+}
 
 /** @brief The destructor for `WritePageGuard`. This destructor simply calls `Drop()`. */
 WritePageGuard::~WritePageGuard() { Drop(); }

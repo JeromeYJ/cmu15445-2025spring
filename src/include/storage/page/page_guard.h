@@ -124,6 +124,10 @@ class ReadPageGuard {
  * that the owner of the `WritePageGuard` can mutate the page's data as much as they want. However, the existence of a
  * `WritePageGuard` implies that no other `WritePageGuard` or any `ReadPageGuard`s for the same page can exist at the
  * same time.
+ *
+ * "the existence of a
+ * `WritePageGuard` implies that no other `WritePageGuard` or any `ReadPageGuard`s for the same page can exist at the
+ * same time." 这句话给了我思路，要从一个时间点中一个页面的pageGuard类对象存在数量限制思考
  */
 class WritePageGuard {
   /** @brief Only the buffer pool manager is allowed to construct a valid `WritePageGuard.` */

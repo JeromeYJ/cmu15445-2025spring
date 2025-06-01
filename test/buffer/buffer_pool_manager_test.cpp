@@ -27,7 +27,7 @@ const size_t FRAMES = 10;
 // Note that this test assumes you are using the an LRU-K replacement policy.
 const size_t K_DIST = 5;
 
-TEST(BufferPoolManagerTest, DISABLED_VeryBasicTest) {
+TEST(BufferPoolManagerTest, VeryBasicTest) {
   // A very basic test.
 
   auto disk_manager = std::make_shared<DiskManager>(db_fname);
@@ -62,7 +62,7 @@ TEST(BufferPoolManagerTest, DISABLED_VeryBasicTest) {
   ASSERT_TRUE(bpm->DeletePage(pid));
 }
 
-TEST(BufferPoolManagerTest, DISABLED_PagePinEasyTest) {
+TEST(BufferPoolManagerTest, PagePinEasyTest) {
   auto disk_manager = std::make_shared<DiskManager>(db_fname);
   auto bpm = std::make_shared<BufferPoolManager>(2, disk_manager.get(), 5);
 
@@ -157,7 +157,7 @@ TEST(BufferPoolManagerTest, DISABLED_PagePinEasyTest) {
   remove(disk_manager->GetLogFileName());
 }
 
-TEST(BufferPoolManagerTest, DISABLED_PagePinMediumTest) {
+TEST(BufferPoolManagerTest, PagePinMediumTest) {
   auto disk_manager = std::make_shared<DiskManager>(db_fname);
   auto bpm = std::make_shared<BufferPoolManager>(FRAMES, disk_manager.get(), K_DIST);
 
@@ -180,6 +180,15 @@ TEST(BufferPoolManagerTest, DISABLED_PagePinMediumTest) {
     auto page = bpm->WritePage(pid);
     pages.push_back(std::move(page));
   }
+
+  char buf[BUSTUB_PAGE_SIZE] = {0};
+  char data[BUSTUB_PAGE_SIZE] = {0};
+  auto dm = DiskManager(db_fname);
+  std::strncpy(data, "Hello", sizeof(data));
+
+  dm.ReadPage(0, buf);  // tolerate empty read
+
+  EXPECT_EQ(std::memcmp(buf, data, sizeof(buf)), 0);
 
   // Scenario: All of the pin counts should be 1.
   for (const auto &page : pages) {
@@ -235,7 +244,7 @@ TEST(BufferPoolManagerTest, DISABLED_PagePinMediumTest) {
   remove(db_fname);
 }
 
-TEST(BufferPoolManagerTest, DISABLED_PageAccessTest) {
+TEST(BufferPoolManagerTest, PageAccessTest) {
   const size_t rounds = 50;
 
   auto disk_manager = std::make_shared<DiskManager>(db_fname);
@@ -273,7 +282,7 @@ TEST(BufferPoolManagerTest, DISABLED_PageAccessTest) {
   thread.join();
 }
 
-TEST(BufferPoolManagerTest, DISABLED_ContentionTest) {
+TEST(BufferPoolManagerTest, ContentionTest) {
   auto disk_manager = std::make_shared<DiskManager>(db_fname);
   auto bpm = std::make_shared<BufferPoolManager>(FRAMES, disk_manager.get(), K_DIST);
 
@@ -315,7 +324,7 @@ TEST(BufferPoolManagerTest, DISABLED_ContentionTest) {
   thread1.join();
 }
 
-TEST(BufferPoolManagerTest, DISABLED_DeadlockTest) {
+TEST(BufferPoolManagerTest, DeadlockTest) {
   auto disk_manager = std::make_shared<DiskManager>(db_fname);
   auto bpm = std::make_shared<BufferPoolManager>(FRAMES, disk_manager.get(), K_DIST);
 
@@ -355,7 +364,7 @@ TEST(BufferPoolManagerTest, DISABLED_DeadlockTest) {
   child.join();
 }
 
-TEST(BufferPoolManagerTest, DISABLED_EvictableTest) {
+TEST(BufferPoolManagerTest, EvictableTest) {
   // Test if the evictable status of a frame is always correct.
   size_t rounds = 1000;
   size_t num_readers = 8;
@@ -408,7 +417,7 @@ TEST(BufferPoolManagerTest, DISABLED_EvictableTest) {
       // Allow other threads to read.
       read_guard.Drop();
     } else {
-      // Take the read latch on the page and pin it.
+      // Take the write latch on the page and pin it.
       auto write_guard = bpm->WritePage(winner_pid);
 
       // Wake up all of the readers.
