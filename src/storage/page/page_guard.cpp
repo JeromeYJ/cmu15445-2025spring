@@ -42,12 +42,13 @@ ReadPageGuard::ReadPageGuard(page_id_t page_id, std::shared_ptr<FrameHeader> fra
       bpm_latch_(std::move(bpm_latch)),
       is_valid_(true) {
   frame_->rwlatch_.lock_shared();
-  // frame_->pin_count_++;
-  // frame_->page_id_ = page_id;
-  // // 记得更新 replacer_ 中 LRU-K 历史信息
-  // // 这个更新的位置要在这里，在外面会出现还没有访问到该页面，就修改了replacer_中LRU-K队列的情况
-  // replacer_->RecordAccess(frame_->frame_id_);
-  // replacer_->SetEvictable(frame_->frame_id_, false);
+  frame_->pin_count_++;
+  frame_->page_id_ = page_id;
+  // 记得更新 replacer_ 中 LRU-K 历史信息
+  // 这个更新的位置要在这里，在外面会出现还没有访问到该页面，就修改了replacer_中LRU-K队列的情况
+  // 不过好像放外面也不影响测试
+  replacer_->RecordAccess(frame_->frame_id_);
+  replacer_->SetEvictable(frame_->frame_id_, false);
 }
 
 /**
@@ -156,18 +157,14 @@ void ReadPageGuard::Drop() {
     return;
   }
 
-  // bpm_latch_->lock();
   frame_->pin_count_--;
   if (frame_->pin_count_.load() == 0) {
     replacer_->SetEvictable(frame_->frame_id_, true);
   }
-  // bpm_latch_->unlock();
   frame_->rwlatch_.unlock_shared();
   is_valid_ = false;
   replacer_ = nullptr;
   frame_ = nullptr;
-  // TODO(Jerome): bpm_latch_的操作
-  // 可能是为了可以操作replacer_? 需要解锁之类的？
 }
 
 /** @brief The destructor for `ReadPageGuard`. This destructor simply calls `Drop()`. */
@@ -198,10 +195,10 @@ WritePageGuard::WritePageGuard(page_id_t page_id, std::shared_ptr<FrameHeader> f
       is_valid_(true) {
   frame_->is_dirty_ = true;
   frame_->rwlatch_.lock();
-  // frame_->pin_count_++;
-  // frame_->page_id_ = page_id;
-  // replacer_->RecordAccess(frame_->frame_id_);
-  // replacer_->SetEvictable(frame_->frame_id_, false);
+  frame_->pin_count_++;
+  frame_->page_id_ = page_id;
+  replacer_->RecordAccess(frame_->frame_id_);
+  replacer_->SetEvictable(frame_->frame_id_, false);
 }
 
 /**
@@ -315,20 +312,15 @@ void WritePageGuard::Drop() {
     return;
   }
 
-  // bpm_latch_->lock();
-  //  frame_->pin_count_.store(0);
   frame_->pin_count_--;
   if (frame_->pin_count_.load() == 0) {
     replacer_->SetEvictable(frame_->frame_id_, true);
   }
-  // bpm_latch_->unlock();
 
   frame_->rwlatch_.unlock();
   is_valid_ = false;
   replacer_ = nullptr;
   frame_ = nullptr;
-  // TODO(Jerome): bpm_latch_的操作
-  // 可能是为了可以操作replacer_? 需要解锁之类的?
 }
 
 /** @brief The destructor for `WritePageGuard`. This destructor simply calls `Drop()`. */

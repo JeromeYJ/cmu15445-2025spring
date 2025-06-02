@@ -240,26 +240,21 @@ auto BufferPoolManager::CheckedWritePage(page_id_t page_id, AccessType access_ty
       FlushPage(evicted_page_id);
       page_table_.erase(evicted_page_id);
       page_table_[page_id] = frame_id;
-      // frames_[frame_id]->pin_count_.store(1);
-      // frames_[frame_id]->is_dirty_ = true;
     } else {
       frame_id = free_frames_.front();
       free_frames_.pop_front();
       page_table_[page_id] = frame_id;
     }
 
-    // 记得更新 replacer_ 中 LRU-K 历史信息
-    // replacer_->RecordAccess(frame_id);
-
     auto promise = disk_scheduler_->CreatePromise();
     auto future = promise.get_future();
     disk_scheduler_->Schedule({false, frames_[frame_id]->GetDataMut(), page_id, std::move(promise)});
     future.get();
 
-    frames_[frame_id]->pin_count_++;
-    frames_[frame_id]->page_id_ = page_id;
-    replacer_->RecordAccess(frame_id);
-    replacer_->SetEvictable(frame_id, false);
+    // frames_[frame_id]->pin_count_++;
+    // frames_[frame_id]->page_id_ = page_id;
+    // replacer_->RecordAccess(frame_id);
+    // replacer_->SetEvictable(frame_id, false);
 
     if (!TestWriteLock(frame_id)) {
       lk.unlock();
@@ -270,13 +265,11 @@ auto BufferPoolManager::CheckedWritePage(page_id_t page_id, AccessType access_ty
 
   // (2) 对应page在buffer pool中
   frame_id_t frame_id = page_table_[page_id];
-  // 记得更新 replacer_ 中 LRU-K 历史信息
-  // replacer_->RecordAccess(frame_id);
 
-  frames_[frame_id]->pin_count_++;
-  frames_[frame_id]->page_id_ = page_id;
-  replacer_->RecordAccess(frame_id);
-  replacer_->SetEvictable(frame_id, false);
+  // frames_[frame_id]->pin_count_++;
+  // frames_[frame_id]->page_id_ = page_id;
+  // replacer_->RecordAccess(frame_id);
+  // replacer_->SetEvictable(frame_id, false);
 
   if (!TestWriteLock(frame_id)) {
     lk.unlock();
@@ -340,10 +333,10 @@ auto BufferPoolManager::CheckedReadPage(page_id_t page_id, AccessType access_typ
     disk_scheduler_->Schedule({false, frames_[frame_id]->GetDataMut(), page_id, std::move(promise)});
     future.get();
 
-    frames_[frame_id]->pin_count_++;
-    frames_[frame_id]->page_id_ = page_id;
-    replacer_->RecordAccess(frame_id);
-    replacer_->SetEvictable(frame_id, false);
+    // frames_[frame_id]->pin_count_++;
+    // frames_[frame_id]->page_id_ = page_id;
+    // replacer_->RecordAccess(frame_id);
+    // replacer_->SetEvictable(frame_id, false);
 
     if (!TestReadLock(frame_id)) {
       lk.unlock();
@@ -354,10 +347,10 @@ auto BufferPoolManager::CheckedReadPage(page_id_t page_id, AccessType access_typ
   // (2) 对应page在buffer pool中
   frame_id_t frame_id = page_table_[page_id];
 
-  frames_[frame_id]->pin_count_++;
-  frames_[frame_id]->page_id_ = page_id;
-  replacer_->RecordAccess(frame_id);
-  replacer_->SetEvictable(frame_id, false);
+  // frames_[frame_id]->pin_count_++;
+  // frames_[frame_id]->page_id_ = page_id;
+  // replacer_->RecordAccess(frame_id);
+  // replacer_->SetEvictable(frame_id, false);
 
   // 避免死锁
   if (!TestReadLock(frame_id)) {
