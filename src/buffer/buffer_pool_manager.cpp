@@ -261,7 +261,9 @@ auto BufferPoolManager::CheckedWritePage(page_id_t page_id, AccessType access_ty
     replacer_->RecordAccess(frame_id);
     replacer_->SetEvictable(frame_id, false);
 
-    TestLock(frame_id);
+    if (!TestWriteLock(frame_id)) {
+      lk.unlock();
+    }
     // 这里的shared_ptr参数都不能move，不然buffer pool manager对象某些成员就无了
     return WritePageGuard(page_id, frames_[frame_id], replacer_, bpm_latch_);
   }
@@ -276,7 +278,9 @@ auto BufferPoolManager::CheckedWritePage(page_id_t page_id, AccessType access_ty
   replacer_->RecordAccess(frame_id);
   replacer_->SetEvictable(frame_id, false);
 
-  TestLock(frame_id);
+  if (!TestWriteLock(frame_id)) {
+    lk.unlock();
+  }
   return WritePageGuard(page_id, frames_[frame_id], replacer_, bpm_latch_);
 }
 
@@ -341,7 +345,9 @@ auto BufferPoolManager::CheckedReadPage(page_id_t page_id, AccessType access_typ
     replacer_->RecordAccess(frame_id);
     replacer_->SetEvictable(frame_id, false);
 
-    TestLock(frame_id);
+    if (!TestReadLock(frame_id)) {
+      lk.unlock();
+    }
     // 这里的shared_ptr参数都不能move，不然buffer pool manager对象某些成员就无了
     return ReadPageGuard(page_id, frames_[frame_id], replacer_, bpm_latch_);
   }
@@ -354,7 +360,9 @@ auto BufferPoolManager::CheckedReadPage(page_id_t page_id, AccessType access_typ
   replacer_->SetEvictable(frame_id, false);
 
   // 避免死锁
-  TestLock(frame_id);
+  if (!TestReadLock(frame_id)) {
+    lk.unlock();
+  }
   return ReadPageGuard(page_id, frames_[frame_id], replacer_, bpm_latch_);
 }
 
@@ -493,14 +501,32 @@ auto BufferPoolManager::GetPinCount(page_id_t page_id) -> std::optional<size_t> 
   return frames_[frame_id]->pin_count_.load();
 }
 
-void BufferPoolManager::TestLock(frame_id_t frame_id) {
+auto BufferPoolManager::TestReadLock(frame_id_t frame_id) -> bool {
+  // 如果对应帧guard目前存在读/写锁，先将bpm_latch_解锁，让其他线程可以操作
+  if (frames_[frame_id]->rwlatch_.try_lock_shared()) {
+    // try_lock()会获得锁，所以要记得unlock()
+    frames_[frame_id]->rwlatch_.unlock_shared();
+    return true;
+  }
+
+  return false;
+
+  // bpm_latch_->unlock();
+  // frames_[frame_id]->rwlatch_.lock_shared();
+}
+
+auto BufferPoolManager::TestWriteLock(frame_id_t frame_id) -> bool {
   // 如果对应帧guard目前存在读/写锁，先将bpm_latch_解锁，让其他线程可以操作
   if (frames_[frame_id]->rwlatch_.try_lock()) {
     // try_lock()会获得锁，所以要记得unlock()
     frames_[frame_id]->rwlatch_.unlock();
-  } else {
-    bpm_latch_->unlock();
+    return true;
   }
+
+  return false;
+
+  // bpm_latch_->unlock();
+  // frames_[frame_id]->rwlatch_.lock();
 }
 
 }  // namespace bustub

@@ -173,8 +173,13 @@ class BufferPoolManager {
    */
 
   /**
-   * @brief 用于检测pageGuard是否被锁
+   * @brief 用于检测ReadPageGuard是否被锁
    */
-  void TestLock(frame_id_t frame_id);
+  auto TestReadLock(frame_id_t frame_id) -> bool;
+
+  /**
+   * @brief 用于检测WritePageGuard是否被锁
+   */
+  auto TestWriteLock(frame_id_t frame_id) -> bool;
 };
 }  // namespace bustub

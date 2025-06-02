@@ -196,9 +196,9 @@ WritePageGuard::WritePageGuard(page_id_t page_id, std::shared_ptr<FrameHeader> f
       replacer_(std::move(replacer)),
       bpm_latch_(std::move(bpm_latch)),
       is_valid_(true) {
+  frame_->is_dirty_ = true;
   frame_->rwlatch_.lock();
   // frame_->pin_count_++;
-  frame_->is_dirty_ = true;
   // frame_->page_id_ = page_id;
   // replacer_->RecordAccess(frame_->frame_id_);
   // replacer_->SetEvictable(frame_->frame_id_, false);
@@ -316,12 +316,13 @@ void WritePageGuard::Drop() {
   }
 
   // bpm_latch_->lock();
-  // frame_->pin_count_.store(0);
+  //  frame_->pin_count_.store(0);
   frame_->pin_count_--;
   if (frame_->pin_count_.load() == 0) {
     replacer_->SetEvictable(frame_->frame_id_, true);
   }
   // bpm_latch_->unlock();
+
   frame_->rwlatch_.unlock();
   is_valid_ = false;
   replacer_ = nullptr;
