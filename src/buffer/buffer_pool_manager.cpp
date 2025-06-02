@@ -256,6 +256,11 @@ auto BufferPoolManager::CheckedWritePage(page_id_t page_id, AccessType access_ty
     disk_scheduler_->Schedule({false, frames_[frame_id]->GetDataMut(), page_id, std::move(promise)});
     future.get();
 
+    frames_[frame_id]->pin_count_++;
+    frames_[frame_id]->page_id_ = page_id;
+    replacer_->RecordAccess(frame_id);
+    replacer_->SetEvictable(frame_id, false);
+
     TestLock(frame_id);
     // 这里的shared_ptr参数都不能move，不然buffer pool manager对象某些成员就无了
     return WritePageGuard(page_id, frames_[frame_id], replacer_, bpm_latch_);
@@ -265,6 +270,11 @@ auto BufferPoolManager::CheckedWritePage(page_id_t page_id, AccessType access_ty
   frame_id_t frame_id = page_table_[page_id];
   // 记得更新 replacer_ 中 LRU-K 历史信息
   // replacer_->RecordAccess(frame_id);
+
+  frames_[frame_id]->pin_count_++;
+  frames_[frame_id]->page_id_ = page_id;
+  replacer_->RecordAccess(frame_id);
+  replacer_->SetEvictable(frame_id, false);
 
   TestLock(frame_id);
   return WritePageGuard(page_id, frames_[frame_id], replacer_, bpm_latch_);
@@ -326,12 +336,22 @@ auto BufferPoolManager::CheckedReadPage(page_id_t page_id, AccessType access_typ
     disk_scheduler_->Schedule({false, frames_[frame_id]->GetDataMut(), page_id, std::move(promise)});
     future.get();
 
+    frames_[frame_id]->pin_count_++;
+    frames_[frame_id]->page_id_ = page_id;
+    replacer_->RecordAccess(frame_id);
+    replacer_->SetEvictable(frame_id, false);
+
     TestLock(frame_id);
     // 这里的shared_ptr参数都不能move，不然buffer pool manager对象某些成员就无了
     return ReadPageGuard(page_id, frames_[frame_id], replacer_, bpm_latch_);
   }
   // (2) 对应page在buffer pool中
   frame_id_t frame_id = page_table_[page_id];
+
+  frames_[frame_id]->pin_count_++;
+  frames_[frame_id]->page_id_ = page_id;
+  replacer_->RecordAccess(frame_id);
+  replacer_->SetEvictable(frame_id, false);
 
   // 避免死锁
   TestLock(frame_id);
@@ -432,11 +452,9 @@ void BufferPoolManager::FlushAllPages() {
 
   for (const auto &it : frames_) {
     if (it->is_dirty_) {
-      char data[BUSTUB_PAGE_SIZE];
-      std::strncpy(data, it->GetData(), sizeof(data));
       auto promise = disk_scheduler_->CreatePromise();
       auto future = promise.get_future();
-      disk_scheduler_->Schedule({true, data, it->page_id_, std::move(promise)});
+      disk_scheduler_->Schedule({true, it->GetDataMut(), it->page_id_, std::move(promise)});
       future.get();
     }
   }

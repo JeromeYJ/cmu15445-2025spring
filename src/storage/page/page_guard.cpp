@@ -42,12 +42,12 @@ ReadPageGuard::ReadPageGuard(page_id_t page_id, std::shared_ptr<FrameHeader> fra
       bpm_latch_(std::move(bpm_latch)),
       is_valid_(true) {
   frame_->rwlatch_.lock_shared();
-  frame_->pin_count_++;
-  frame_->page_id_ = page_id;
-  // 记得更新 replacer_ 中 LRU-K 历史信息
-  // 这个更新的位置要在这里，在外面会出现还没有访问到该页面，就修改了replacer_中LRU-K队列的情况
-  replacer_->RecordAccess(frame_->frame_id_);
-  replacer_->SetEvictable(frame_->frame_id_, false);
+  // frame_->pin_count_++;
+  // frame_->page_id_ = page_id;
+  // // 记得更新 replacer_ 中 LRU-K 历史信息
+  // // 这个更新的位置要在这里，在外面会出现还没有访问到该页面，就修改了replacer_中LRU-K队列的情况
+  // replacer_->RecordAccess(frame_->frame_id_);
+  // replacer_->SetEvictable(frame_->frame_id_, false);
 }
 
 /**
@@ -197,11 +197,11 @@ WritePageGuard::WritePageGuard(page_id_t page_id, std::shared_ptr<FrameHeader> f
       bpm_latch_(std::move(bpm_latch)),
       is_valid_(true) {
   frame_->rwlatch_.lock();
-  frame_->pin_count_++;
+  // frame_->pin_count_++;
   frame_->is_dirty_ = true;
-  frame_->page_id_ = page_id;
-  replacer_->RecordAccess(frame_->frame_id_);
-  replacer_->SetEvictable(frame_->frame_id_, false);
+  // frame_->page_id_ = page_id;
+  // replacer_->RecordAccess(frame_->frame_id_);
+  // replacer_->SetEvictable(frame_->frame_id_, false);
 }
 
 /**
@@ -316,7 +316,7 @@ void WritePageGuard::Drop() {
   }
 
   // bpm_latch_->lock();
-  //  frame_->pin_count_.store(0);
+  // frame_->pin_count_.store(0);
   frame_->pin_count_--;
   if (frame_->pin_count_.load() == 0) {
     replacer_->SetEvictable(frame_->frame_id_, true);
