@@ -80,7 +80,6 @@ ReadPageGuard::ReadPageGuard(ReadPageGuard &&that) noexcept {
   bpm_latch_ = std::move(that.bpm_latch_);
   is_valid_ = that.is_valid_;
   that.is_valid_ = false;
-  replacer_->SetEvictable(frame_->frame_id_, false);
 }
 
 /**
@@ -113,7 +112,6 @@ auto ReadPageGuard::operator=(ReadPageGuard &&that) noexcept -> ReadPageGuard & 
   bpm_latch_ = std::move(that.bpm_latch_);
   is_valid_ = that.is_valid_;
   that.is_valid_ = false;
-  replacer_->SetEvictable(frame_->frame_id_, false);
   return *this;
 }
 
@@ -227,7 +225,6 @@ WritePageGuard::WritePageGuard(WritePageGuard &&that) noexcept {
   bpm_latch_ = std::move(that.bpm_latch_);
   is_valid_ = that.is_valid_;
   that.is_valid_ = false;
-  replacer_->SetEvictable(frame_->frame_id_, false);
 }
 
 /**
@@ -258,7 +255,6 @@ auto WritePageGuard::operator=(WritePageGuard &&that) noexcept -> WritePageGuard
   bpm_latch_ = std::move(that.bpm_latch_);
   is_valid_ = that.is_valid_;
   that.is_valid_ = false;
-  replacer_->SetEvictable(frame_->frame_id_, false);
   return *this;
 }
 

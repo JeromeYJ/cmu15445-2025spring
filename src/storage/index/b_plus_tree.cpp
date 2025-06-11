@@ -21,14 +21,18 @@ BPLUSTREE_TYPE::BPlusTree(std::string name, page_id_t header_page_id, BufferPool
  * Helper function to decide whether current b+tree is empty
  */
 INDEX_TEMPLATE_ARGUMENTS
-auto BPLUSTREE_TYPE::IsEmpty() const -> bool { return true; }
+auto BPLUSTREE_TYPE::IsEmpty() const -> bool { 
+  WritePageGuard guard = bpm_->WritePage(header_page_id_);
+  auto head_page = guard.AsMut<BPlusTreeHeaderPage>();
+  return head_page->root_page_id_ == INVALID_PAGE_ID;
+}
 
 /*****************************************************************************
  * SEARCH
  *****************************************************************************/
 /*
  * Return the only value that associated with input key
- * This method is used for point query
+ * This method is used for point query(点查询)
  * @return : true means key exists
  */
 INDEX_TEMPLATE_ARGUMENTS
@@ -53,6 +57,18 @@ INDEX_TEMPLATE_ARGUMENTS
 auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value) -> bool {
   // Declaration of context instance.
   Context ctx;
+
+  // (1)如果tree是空的
+  if (IsEmpty()) {
+    page_id_t root_page_id = bpm_->NewPage();
+
+    WritePageGuard guard = bpm_->WritePage(header_page_id_);
+    auto head_page = guard.AsMut<BPlusTreeHeaderPage>();
+    head_page->root_page_id_ = root_page_id;
+    
+    
+  }
+
   (void)ctx;
   return false;
 }
