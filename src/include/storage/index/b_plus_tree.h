@@ -61,6 +61,7 @@ class Context {
 // Main class providing the API for the Interactive B+ Tree.
 INDEX_TEMPLATE_ARGUMENTS
 class BPlusTree {
+  // 注意类模板中的ValueType是叶子结点的值类型，内部节点的值类型为page_id_t
   using InternalPage = BPlusTreeInternalPage<KeyType, page_id_t, KeyComparator>;
   using LeafPage = BPlusTreeLeafPage<KeyType, ValueType, KeyComparator>;
 
@@ -127,6 +128,8 @@ class BPlusTree {
    */
   void BatchOpsFromFile(const std::filesystem::path &file_name);
 
+  
+
  private:
   /* Debug Routines for FREE!! */
   void ToGraph(page_id_t page_id, const BPlusTreePage *page, std::ofstream &out);
@@ -140,6 +143,11 @@ class BPlusTree {
    * @return PrintableNode
    */
   auto ToPrintableBPlusTree(page_id_t root_id) -> PrintableBPlusTree;
+
+  /**
+   * 使用二分查找进行键查找的函数
+   */
+  auto KeyBinarySearch(BPlusTreePage *page, const KeyType &key) -> int;
 
   // member variable
   std::string index_name_;

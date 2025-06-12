@@ -151,4 +151,34 @@ TEST(BPlusTreeTests, DISABLED_InsertTest2) {
   }
   delete bpm;
 }
+
+TEST(BPlusTreeTests, DISABLED_BinarySearchTest) {
+  // create KeyComparator and index schema
+  auto key_schema = ParseCreateStatement("a bigint");
+  GenericComparator<8> comparator(key_schema.get());
+
+  auto disk_manager = std::make_unique<DiskManagerUnlimitedMemory>();
+  auto *bpm = new BufferPoolManager(50, disk_manager.get());
+  // allocate header_page
+  page_id_t page_id = bpm->NewPage();
+  // create b+ tree
+  BPlusTree<GenericKey<8>, RID, GenericComparator<8>> tree("foo_pk", page_id, bpm, comparator, 2, 3);
+  GenericKey<8> index_key;
+
+  page_id = bpm->NewPage();
+  WritePageGuard guard = bpm->WritePage(page_id);
+  auto page = guard.AsMut<BPlusTreeInternalPage<GenericKey<8>, page_id_t, GenericComparator<8>>>();
+  
+  // 1 3 4 5 6 8 9 12 14
+  page->Init(12);
+  int arr[] = {1,3,4,5,6,8,9,12,14};
+  for(int i = 0; i < 9; i++) {
+    index_key.SetFromInteger(arr[i]);
+    page->SetKeyAt(i + 1, index_key);
+  }
+  page->SetSize(9);
+  
+  index_key.SetFromInteger(7);
+  //EXPECT_EQ(tree.KeyBinarySearch(page, index_key), 5);
+}
 }  // namespace bustub
