@@ -79,7 +79,6 @@ class BPlusTreeInternalPage : public BPlusTreePage {
    */
   auto ValueAt(int index) const -> ValueType;
 
-  
   void SetValueAt(int index, const ValueType &value);
 
   /**

@@ -255,6 +255,7 @@ auto WritePageGuard::operator=(WritePageGuard &&that) noexcept -> WritePageGuard
   bpm_latch_ = std::move(that.bpm_latch_);
   is_valid_ = that.is_valid_;
   that.is_valid_ = false;
+  // that不要Drop()，对应页面不要解锁，只是将页面管理权给了新的 WritePageGuard，也就是*this。对应页面依旧在上锁状态
   return *this;
 }
 

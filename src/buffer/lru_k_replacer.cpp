@@ -64,18 +64,14 @@ void LRUKReplacer::RecordAccess(frame_id_t frame_id, AccessType access_type) {
     node_store_[frame_id].history_.push_front(current_timestamp_);
     new_frames_.push_front(frame_id);
     new_frames_locator_[frame_id] = new_frames_.begin();
-  }
-  // (2)原本history中引用历史数量小于k-1
-  else if (node_store_[frame_id].history_.size() < k_ - 1) {
+  } else if (node_store_[frame_id].history_.size() < k_ - 1) {  // (2)原本history中引用历史数量小于k-1
     node_store_[frame_id].history_.push_front(current_timestamp_);
     // 这里小于k时要求是更早进入的先淘汰，即考虑最早的时间戳，不考虑之后的引用情况。与LRU不太一样
     // 也可以用splice()实现迭代器的位置转移
     // new_frames_.erase(new_frames_locator_[frame_id]);
     // new_frames_.push_front(frame_id);
     // new_frames_locator_[frame_id] = new_frames_.begin();
-  }
-  // (3)原本history中引用历史数量为k-1
-  else if (node_store_[frame_id].history_.size() == k_ - 1) {
+  } else if (node_store_[frame_id].history_.size() == k_ - 1) {  // (3)原本history中引用历史数量为k-1
     node_store_[frame_id].history_.push_front(current_timestamp_);
     new_frames_.erase(new_frames_locator_[frame_id]);
     new_frames_locator_.erase(frame_id);
@@ -89,9 +85,7 @@ void LRUKReplacer::RecordAccess(frame_id_t frame_id, AccessType access_type) {
     }
     auto inserted_it = cache_frames_.insert(it, frame_id);
     cache_frames_locator_[frame_id] = inserted_it;
-  }
-  // (4)原本history中引用历史数量为k
-  else if (node_store_[frame_id].history_.size() == k_) {
+  } else if (node_store_[frame_id].history_.size() == k_) {  // (4)原本history中引用历史数量为k
     node_store_[frame_id].history_.push_front(current_timestamp_);
     node_store_[frame_id].history_.pop_back();
     size_t k_timestamp = node_store_[frame_id].history_.back();

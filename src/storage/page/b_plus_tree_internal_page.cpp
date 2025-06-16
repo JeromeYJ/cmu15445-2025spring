@@ -34,7 +34,7 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::Init(int max_size) {
  * array offset)
  */
 INDEX_TEMPLATE_ARGUMENTS
-auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::KeyAt(int index) const -> KeyType { 
+auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::KeyAt(int index) const -> KeyType {
   if (index == 0) {
     throw std::runtime_error("index can not be zero!");
   }
@@ -47,14 +47,14 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::SetKeyAt(int index, const KeyType &key) {
     throw std::runtime_error("index can not be zero!");
   }
   key_array_[index] = key;
-  // TODO(Jeome)：关于size_变化的部分还不知道怎么弄，有可能之后需要加上
+  // TODO(Jeome) ：关于size_变化的部分还不知道怎么弄，有可能之后需要加上
 }
 
 INDEX_TEMPLATE_ARGUMENTS
 auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::ValueIndex(const ValueType &value) const -> int {
   for (int i = 0; i < INTERNAL_PAGE_SLOT_CNT; i++) {
     if (page_id_array_[i] == value) {
-        return i;
+      return i;
     }
   }
   return INTERNAL_PAGE_SLOT_CNT;
