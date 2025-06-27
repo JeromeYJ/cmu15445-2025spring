@@ -155,6 +155,11 @@ class BPlusTree {
    */
   auto IndexBinarySearchLeaf(LeafPage *page, const KeyType &key) -> int;
 
+  /**
+   * 获取BPlusTreePage类型的某个index位置的值的函数
+   */
+  auto ValueAt(const BPlusTreePage *page, int index) -> page_id_t;
+
   // member variable
   std::string index_name_;
   BufferPoolManager *bpm_;

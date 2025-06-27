@@ -104,6 +104,18 @@ auto BPLUSTREE_TYPE::IndexBinarySearchLeaf(LeafPage *page, const KeyType &key) -
   return -1;
 }
 
+/**
+ * 获取BPlusTreePage类型的某个index位置的值的函数
+ */
+INDEX_TEMPLATE_ARGUMENTS
+auto BPLUSTREE_TYPE::ValueAt(const BPlusTreePage *page, int index) -> page_id_t {
+  if (page->IsLeafPage()) {
+    return static_cast<LeafPage *>(page)->ValueAt(index);
+  } else {
+    return static_cast<InternalPage *>(page)->ValueAt(index);
+  }
+}
+
 /*****************************************************************************
  * SEARCH
  *****************************************************************************/
@@ -328,6 +340,7 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value) -> bool 
     internal_page->SetSize(first_size);
 
     // 这里要注意，最中间的key是不需要保留在两个结点中的，会作为insert_key向一层传递，插入到上一层的internal page中
+    // 最中间的key反映了右侧结点所在子树的最小值水平，所以向上传递，插入上层结点
     if (insert_index < first_size) {
       KeyType tmp_key = internal_page->KeyAt(first_size - 1);
       for (int i = 0; i < second_size; i++) {
@@ -411,7 +424,107 @@ INDEX_TEMPLATE_ARGUMENTS
 void BPLUSTREE_TYPE::Remove(const KeyType &key) {
   // Declaration of context instance.
   Context ctx;
-  (void)ctx;
+
+  WritePageGuard head_guard = bpm_->WritePage(header_page_id_);
+  ctx.header_page_ = std::make_optional(std::move(head_guard));
+  ctx.root_page_id_ = ctx.header_page_->AsMut<BPlusTreeHeaderPage>()->root_page_id_;
+
+  /* (1) 如果tree是空的 */
+  if (ctx.root_page_id_ == INVALID_PAGE_ID) {
+    return;
+  }
+
+  /* (2) 如果tree不是空的*/
+  /* (2.1) 首先找到要进行删除操作的叶子结点 */
+  WritePageGuard page_guard = bpm_->WritePage(ctx.root_page_id_);
+  auto page = page_guard.AsMut<BPlusTreePage>();
+  ctx.write_set_.push_back(std::move(page_guard));
+
+  while (!page->IsLeafPage()) {
+    int index = KeyBinarySearch(page, key);
+    if (index == -1) {
+      return false;
+    }
+    auto internal_page = static_cast<InternalPage *>(page);
+    page_id_t page_id = internal_page->ValueAt(index);
+    // 要记得维护ctx对象
+    ctx.write_set_.push_back(bpm_->WritePage(page_id));
+    // 个人觉得需要在context类中加入存放内部结点搜索位置index的数组
+    ctx.indexes_.push_back(index);
+    page = ctx.write_set_.back().AsMut<BPlusTreePage>();
+  }
+
+  /* (2.2) 之后找到要删除key的位置 */
+  int delete_index = KeyBinarySearch(page, key);
+  if (delete_index == -1) {
+    return;
+  }
+
+  // 统一先将对应的key删除
+  int size = page->GetSize();
+  for (int i = delete_index; i < size - 1; i++) {
+    page->SetKeyAt(i, page->KeyAt(i + 1));
+    page->SetValueAt(i, page->ValueAt(i + 1));
+  }
+  // 随时记得修改结点size_
+  page->SetSize(size - 1);
+
+  /* (2.3) 若删除后的叶子结点大于等于半满，则完成删除操作 */
+  if (page->GetSize() >= page->GetMinSize()) {
+    return;
+  }
+
+  /* (2.4) 若删除后的叶子结点小于半满，则先判断能否从sibling结点中借key。若可借则借完后修改父结点即可；若不能借则进行与sibling的合并，之后再向上判断内部结点情况。内部结点同理。由此设计向上迭代的处理过程 */
+  while (!ctx.write_set_.empty()) {
+    // 使用反向迭代器获取deque倒数第二个元素，即当前处理元素的父结点
+    auto it = ctx.write_set_.rbegin();
+    ++it;
+    // 如果当前write_set中只有一个结点，即root结点
+    if (it == ctx.write_set_.rend()) {
+      // TODO
+
+      return;
+    }
+    auto parent_page = it->AsMut<BPlusTreePage>();
+    int index = ctx.indexes_.back();
+
+    // 先判断是否可以左借用
+    if (index > 0) {
+      WritePageGuard left_guard = bpm_->WritePage(ValueAt(parent_page, index - 1));
+      auto left_page = left_guard.AsMut<BPlusTreePage>();
+      if (left_page->GetSize() > left_page->GetMinSize()) {
+        // TODO
+
+        return;
+      }
+    }
+
+    // 再判断是否可以右借用
+    if (index < parent_page->GetSize() - 1) {
+      WritePageGuard right_guard = bpm_->WritePage(ValueAt(parent_page, index + 1));
+      auto right_page = right_guard.AsMut<BPlusTreePage>();
+      if (right_page->GetSize() > right_page->GetMinSize()) {
+        // TODO
+
+        return;
+      }
+    }
+
+    // 不可借用，则先判断是否可以左合并
+    if (index > 0) {
+      // TODO
+      
+    } else {
+      // 若不可左合并（即index为0时），则进行右合并
+      // TODO
+
+    } 
+
+    ctx.write_set_.pop_back();
+    page = ctx.write_set_.back().AsMut<BPlusTreePage>();
+  }
+  
+  // (void)ctx;
 }
 
 /*****************************************************************************
