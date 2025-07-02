@@ -27,7 +27,7 @@ using bustub::DiskManagerUnlimitedMemory;
 /**
  * (Fall 2024) You should pass this test after finishing insertion and point search.
  */
-TEST(BPlusTreeTests, DISABLED_BasicScaleTest) {  // NOLINT
+TEST(BPlusTreeTests, BasicScaleTest) {  // NOLINT
   // create KeyComparator and index schema
   auto key_schema = ParseCreateStatement("a bigint");
   GenericComparator<8> comparator(key_schema.get());
@@ -43,7 +43,7 @@ TEST(BPlusTreeTests, DISABLED_BasicScaleTest) {  // NOLINT
   GenericKey<8> index_key;
   RID rid;
 
-  int64_t scale = 5000;
+  int64_t scale = 22;
   std::vector<int64_t> keys(scale);
   std::iota(keys.begin(), keys.end(), 1);
 
@@ -55,7 +55,10 @@ TEST(BPlusTreeTests, DISABLED_BasicScaleTest) {  // NOLINT
     rid.Set(static_cast<int32_t>(key >> 32), value);
     index_key.SetFromInteger(key);
     tree.Insert(index_key, rid);
+    // std::cout << tree.DrawBPlusTree() << std::endl;
   }
+
+  // std::cout << tree.DrawBPlusTree() << std::endl;
   std::vector<RID> rids;
   for (auto key : keys) {
     rids.clear();

@@ -79,6 +79,15 @@ TEST(BPlusTreeTests, InsertTest1NoIterator) {
   }
 
   std::cout << tree.DrawBPlusTree() << std::endl;
+  int64_t num = 2;
+  index_key.SetFromInteger(num);
+  int64_t value = num & 0xFFFFFFFF;
+  rid.Set(static_cast<int32_t>(num >> 32), value);
+  if (tree.Insert(index_key, rid)) {
+    std::cout << "true" << std::endl;
+  } else {
+    std::cout << "false" << std::endl;
+  }
 
   bool is_present;
   std::vector<RID> rids;

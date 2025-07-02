@@ -105,14 +105,178 @@ auto BPLUSTREE_TYPE::IndexBinarySearchLeaf(LeafPage *page, const KeyType &key) -
 }
 
 /**
- * 获取BPlusTreePage类型的某个index位置的值的函数
+ * 向左sibling结点借用键值的函数
  */
 INDEX_TEMPLATE_ARGUMENTS
-auto BPLUSTREE_TYPE::ValueAt(const BPlusTreePage *page, int index) -> page_id_t {
+void BPLUSTREE_TYPE::BorrowFromLeft(BPlusTreePage *page, BPlusTreePage *left_page, BPlusTreePage *parent_page,
+                                    int index) {
+  // parent_page必然是内部结点，先将其进行转换
+  auto parent_internal_page = static_cast<InternalPage *>(parent_page);
+  int size = page->GetSize();
+  int left_size = left_page->GetSize();
+
   if (page->IsLeafPage()) {
-    return static_cast<LeafPage *>(page)->ValueAt(index);
+    auto leaf_page = static_cast<LeafPage *>(page);
+    auto left_leaf_page = static_cast<LeafPage *>(left_page);
+
+    for (int i = 0; i < size; i++) {
+      leaf_page->SetKeyAt(i + 1, leaf_page->KeyAt(i));
+      leaf_page->SetValueAt(i + 1, leaf_page->ValueAt(i));
+    }
+    leaf_page->SetKeyAt(0, left_leaf_page->KeyAt(left_size - 1));
+    leaf_page->SetValueAt(0, left_leaf_page->ValueAt(left_size - 1));
+    left_leaf_page->SetSize(left_size - 1);
+    leaf_page->SetSize(size + 1);
+    parent_internal_page->SetKeyAt(index, leaf_page->KeyAt(0));
   } else {
-    return static_cast<InternalPage *>(page)->ValueAt(index);
+    auto internal_page = static_cast<InternalPage *>(page);
+    auto left_internal_page = static_cast<InternalPage *>(left_page);
+
+    for (int i = 0; i < size; i++) {
+      if (i > 0) {
+        internal_page->SetKeyAt(i + 1, internal_page->KeyAt(i));
+      }
+      internal_page->SetValueAt(i + 1, internal_page->ValueAt(i));
+    }
+    internal_page->SetKeyAt(1, parent_internal_page->KeyAt(index));
+    internal_page->SetValueAt(0, left_internal_page->ValueAt(left_size - 1));
+    parent_internal_page->SetKeyAt(index, left_internal_page->KeyAt(left_size - 1));
+    left_internal_page->SetSize(left_size - 1);
+    internal_page->SetSize(size + 1);
+  }
+}
+
+/**
+ * 向右sibling结点借用键值的函数
+ */
+INDEX_TEMPLATE_ARGUMENTS
+void BPLUSTREE_TYPE::BorrowFromRight(BPlusTreePage *page, BPlusTreePage *right_page, BPlusTreePage *parent_page,
+                                     int index) {
+  // parent_page必然是内部结点，先将其进行转换
+  auto parent_internal_page = static_cast<InternalPage *>(parent_page);
+  int size = page->GetSize();
+  int right_size = right_page->GetSize();
+
+  if (page->IsLeafPage()) {
+    auto leaf_page = static_cast<LeafPage *>(page);
+    auto right_leaf_page = static_cast<LeafPage *>(right_page);
+
+    leaf_page->SetKeyAt(size, right_leaf_page->KeyAt(0));
+    leaf_page->SetValueAt(size, right_leaf_page->ValueAt(0));
+    for (int i = 0; i < right_size; i++) {
+      right_leaf_page->SetKeyAt(i, right_leaf_page->KeyAt(i + 1));
+      right_leaf_page->SetValueAt(i, right_leaf_page->ValueAt(i + 1));
+    }
+    right_leaf_page->SetSize(right_size - 1);
+    leaf_page->SetSize(size + 1);
+    parent_internal_page->SetKeyAt(index + 1, right_leaf_page->KeyAt(0));
+  } else {
+    auto internal_page = static_cast<InternalPage *>(page);
+    auto right_internal_page = static_cast<InternalPage *>(right_page);
+
+    internal_page->SetKeyAt(size, parent_internal_page->KeyAt(index + 1));
+    internal_page->SetValueAt(size, right_internal_page->ValueAt(0));
+    parent_internal_page->SetKeyAt(index + 1, right_internal_page->KeyAt(1));
+    for (int i = 0; i < right_size; i++) {
+      if (i > 0) {
+        right_internal_page->SetKeyAt(i, right_internal_page->KeyAt(i + 1));
+      }
+      right_internal_page->SetValueAt(i, right_internal_page->ValueAt(i + 1));
+    }
+    right_internal_page->SetSize(right_size - 1);
+    internal_page->SetSize(size + 1);
+  }
+}
+
+/**
+ * 与左sibling结点合并的函数
+ */
+INDEX_TEMPLATE_ARGUMENTS
+void BPLUSTREE_TYPE::MergeWithLeft(BPlusTreePage *page, BPlusTreePage *left_page, BPlusTreePage *parent_page,
+                                   int index) {
+  int left_size = left_page->GetSize();
+  int size = page->GetSize();
+  int parent_size = parent_page->GetSize();
+  auto parent_internal_page = static_cast<InternalPage *>(parent_page);
+
+  if (page->IsLeafPage()) {
+    auto leaf_page = static_cast<LeafPage *>(page);
+    auto left_leaf_page = static_cast<LeafPage *>(left_page);
+    for (int i = 0; i < size; i++) {
+      left_leaf_page->SetKeyAt(i + left_size, leaf_page->KeyAt(i));
+      left_leaf_page->SetValueAt(i + left_size, leaf_page->ValueAt(i));
+    }
+    // 随时记得更新结点的size
+    left_leaf_page->SetSize(left_size + size);
+  } else {
+    auto internal_page = static_cast<InternalPage *>(page);
+    auto left_internal_page = static_cast<InternalPage *>(left_page);
+    KeyType middle_key = parent_internal_page->KeyAt(index);
+    left_internal_page->SetKeyAt(left_size, middle_key);
+    left_internal_page->SetValueAt(left_size, internal_page->ValueAt(0));
+    for (int i = 1; i < size; i++) {
+      left_internal_page->SetKeyAt(i + left_size, internal_page->KeyAt(i));
+      left_internal_page->SetValueAt(i + left_size, internal_page->ValueAt(i));
+    }
+    left_internal_page->SetSize(left_size + size);
+  }
+
+  // 处理父结点
+  for (int i = index; i < parent_size - 1; i++) {
+    parent_internal_page->SetKeyAt(i, parent_internal_page->KeyAt(i + 1));
+    parent_internal_page->SetValueAt(i, parent_internal_page->ValueAt(i + 1));
+  }
+  // 当parent_size为2时，再减一后其实已经不存在key，则实际size为0
+  if (parent_size == 2) {
+    parent_internal_page->SetSize(0);
+  } else {
+    parent_internal_page->SetSize(parent_size - 1);
+  }
+}
+
+/**
+ * 与右sibling结点合并的函数
+ */
+INDEX_TEMPLATE_ARGUMENTS
+void BPLUSTREE_TYPE::MergeWithRight(BPlusTreePage *page, BPlusTreePage *right_page, BPlusTreePage *parent_page,
+                                    int index) {
+  int right_size = right_page->GetSize();
+  int size = page->GetSize();
+  int parent_size = parent_page->GetSize();
+  auto parent_internal_page = static_cast<InternalPage *>(parent_page);
+
+  if (page->IsLeafPage()) {
+    auto leaf_page = static_cast<LeafPage *>(page);
+    auto right_leaf_page = static_cast<LeafPage *>(right_page);
+    for (int i = 0; i < right_size; i++) {
+      leaf_page->SetKeyAt(i + size, right_leaf_page->KeyAt(i));
+      leaf_page->SetValueAt(i + size, right_leaf_page->ValueAt(i));
+    }
+    // 随时记得更新结点的size
+    leaf_page->SetSize(right_size + size);
+  } else {
+    auto internal_page = static_cast<InternalPage *>(page);
+    auto right_internal_page = static_cast<InternalPage *>(right_page);
+    KeyType middle_key = parent_internal_page->KeyAt(index + 1);
+    internal_page->SetKeyAt(size, middle_key);
+    internal_page->SetValueAt(size, right_internal_page->ValueAt(0));
+    for (int i = 1; i < right_size; i++) {
+      internal_page->SetKeyAt(i + size, right_internal_page->KeyAt(i));
+      internal_page->SetValueAt(i + size, right_internal_page->ValueAt(i));
+    }
+    internal_page->SetSize(right_size + size);
+  }
+
+  // 处理父结点
+  for (int i = index + 1; i < parent_size - 1; i++) {
+    parent_internal_page->SetKeyAt(i, parent_internal_page->KeyAt(i + 1));
+    parent_internal_page->SetValueAt(i, parent_internal_page->ValueAt(i + 1));
+  }
+  // 当parent_size为2时，再减一后其实已经不存在key，则实际size为0
+  if (parent_size == 2) {
+    parent_internal_page->SetSize(0);
+  } else {
+    parent_internal_page->SetSize(parent_size - 1);
   }
 }
 
@@ -224,6 +388,10 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value) -> bool 
   /* (2.2) 之后找到要插入key的位置 */
   auto leaf_page = static_cast<LeafPage *>(page);
   int insert_index = IndexBinarySearchLeaf(leaf_page, key);
+  // 返回-1表示没有满足条件的插入位置，一般为右边界等于key的情况
+  if (insert_index == -1) {
+    return false;
+  }
   // 前面函数找到的index位置可能键与key相同，若相同则返回false
   if (comparator_(leaf_page->KeyAt(insert_index), key) == 0) {
     return false;
@@ -365,9 +533,14 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value) -> bool 
         }
         new_internal_page->SetValueAt(i, internal_page->ValueAt(i + first_size));
       }
-      KeyType tmp_key = internal_page->KeyAt(first_size);
+      KeyType tmp_key;
+      // 这里有过bug，主要原因是写法比较复杂，漏了insert_index正好为first_size的情况，即此时要往上传递的key即为insert_key，而不是internal_page索引为first_size的key
       if (insert_index > first_size) {
         new_internal_page->SetKeyAt(insert_index - first_size, insert_key);
+        tmp_key = internal_page->KeyAt(first_size);
+      } else {
+        // 如果insert_index等于first_size
+        tmp_key = insert_key;
       }
       new_internal_page->SetValueAt(insert_index - first_size, second_split_page_id);
       for (int i = insert_index - first_size + 1; i < second_size; i++) {
@@ -443,7 +616,7 @@ void BPLUSTREE_TYPE::Remove(const KeyType &key) {
   while (!page->IsLeafPage()) {
     int index = KeyBinarySearch(page, key);
     if (index == -1) {
-      return false;
+      return;
     }
     auto internal_page = static_cast<InternalPage *>(page);
     page_id_t page_id = internal_page->ValueAt(index);
@@ -462,68 +635,101 @@ void BPLUSTREE_TYPE::Remove(const KeyType &key) {
 
   // 统一先将对应的key删除
   int size = page->GetSize();
+  auto leaf_page = static_cast<LeafPage *>(page);
   for (int i = delete_index; i < size - 1; i++) {
-    page->SetKeyAt(i, page->KeyAt(i + 1));
-    page->SetValueAt(i, page->ValueAt(i + 1));
+    leaf_page->SetKeyAt(i, leaf_page->KeyAt(i + 1));
+    leaf_page->SetValueAt(i, leaf_page->ValueAt(i + 1));
   }
   // 随时记得修改结点size_
   page->SetSize(size - 1);
 
-  /* (2.3) 若删除后的叶子结点大于等于半满，则完成删除操作 */
-  if (page->GetSize() >= page->GetMinSize()) {
-    return;
-  }
+  // 当前操作结点的page id，在原root变为空要被删除时，也是新root结点的page id，
+  page_id_t now_page_id = INVALID_PAGE_ID;
 
-  /* (2.4) 若删除后的叶子结点小于半满，则先判断能否从sibling结点中借key。若可借则借完后修改父结点即可；若不能借则进行与sibling的合并，之后再向上判断内部结点情况。内部结点同理。由此设计向上迭代的处理过程 */
+  /* (2.3)
+   * 若删除后的结点大于等于半满，则完成删除操作;若删除后的叶子结点小于半满，则先判断能否从sibling结点中借key。若可借则借完后修改父结点即可；若不能借则进行与sibling的合并，之后再向上判断内部结点情况。内部结点同理。由此设计向上迭代的处理过程
+   */
   while (!ctx.write_set_.empty()) {
+    // 如果此时结点为root结点
+    if (ctx.write_set_.size() == 1) {
+      auto root_page = ctx.write_set_.back().AsMut<BPlusTreePage>();
+      // 如果此时root结点为空，则将原root结点删除，且修改root结点的page id
+      if (root_page->GetSize() == 0) {
+        ctx.write_set_.pop_back();
+        bpm_->DeletePage(ctx.root_page_id_);
+        auto header_page = ctx.header_page_->AsMut<BPlusTreeHeaderPage>();
+        header_page->root_page_id_ = now_page_id;
+      }
+      // 若root结点不为空，则不用管minSize的约束，直接return
+      return;
+    }
+
+    // 若删除后的结点大于等于半满，则完成删除操作。这里相当于递归的出口
+    if (page->GetSize() >= page->GetMinSize()) {
+      return;
+    }
+
     // 使用反向迭代器获取deque倒数第二个元素，即当前处理元素的父结点
     auto it = ctx.write_set_.rbegin();
     ++it;
-    // 如果当前write_set中只有一个结点，即root结点
-    if (it == ctx.write_set_.rend()) {
-      // TODO
-
-      return;
-    }
-    auto parent_page = it->AsMut<BPlusTreePage>();
+    auto parent_page = it->AsMut<InternalPage>();
     int index = ctx.indexes_.back();
 
     // 先判断是否可以左借用
     if (index > 0) {
-      WritePageGuard left_guard = bpm_->WritePage(ValueAt(parent_page, index - 1));
+      WritePageGuard left_guard = bpm_->WritePage(parent_page->ValueAt(index - 1));
       auto left_page = left_guard.AsMut<BPlusTreePage>();
+      ctx.write_set_.push_back(std::move(left_guard));
       if (left_page->GetSize() > left_page->GetMinSize()) {
-        // TODO
-
+        BorrowFromLeft(page, left_page, parent_page, index);
         return;
       }
+      // 如果没有进行左借用，记得把left_guard释放，不再占用对应页面
+      ctx.write_set_.pop_back();
     }
 
     // 再判断是否可以右借用
     if (index < parent_page->GetSize() - 1) {
-      WritePageGuard right_guard = bpm_->WritePage(ValueAt(parent_page, index + 1));
+      WritePageGuard right_guard = bpm_->WritePage(parent_page->ValueAt(index + 1));
       auto right_page = right_guard.AsMut<BPlusTreePage>();
+      ctx.write_set_.push_back(std::move(right_guard));
       if (right_page->GetSize() > right_page->GetMinSize()) {
-        // TODO
-
+        BorrowFromRight(page, right_page, parent_page, index);
         return;
       }
+      // 如果没有进行右借用，记得把right_guard释放，不再占用对应页面
+      ctx.write_set_.pop_back();
     }
 
     // 不可借用，则先判断是否可以左合并
     if (index > 0) {
-      // TODO
-      
+      WritePageGuard left_guard = bpm_->WritePage(parent_page->ValueAt(index - 1));
+      auto left_page = left_guard.AsMut<BPlusTreePage>();
+      ctx.write_set_.push_back(std::move(left_guard));
+      MergeWithLeft(page, left_page, parent_page, index);
+      now_page_id = ctx.write_set_.back().GetPageId();
+      ctx.write_set_.pop_back();
+      // 将被合并的页面delete
+      page_id_t page_id = ctx.write_set_.back().GetPageId();
+      ctx.write_set_.pop_back();
+      bpm_->DeletePage(page_id);
     } else {
       // 若不可左合并（即index为0时），则进行右合并
-      // TODO
+      WritePageGuard right_guard = bpm_->WritePage(parent_page->ValueAt(index + 1));
+      auto right_page = right_guard.AsMut<BPlusTreePage>();
+      ctx.write_set_.push_back(std::move(right_guard));
+      MergeWithRight(page, right_page, parent_page, index);
+      // 将被合并的页面delete，注意这里删除的是右边的结点
+      page_id_t page_id = ctx.write_set_.back().GetPageId();
+      ctx.write_set_.pop_back();
+      now_page_id = ctx.write_set_.back().GetPageId();
+      ctx.write_set_.pop_back();
+      bpm_->DeletePage(page_id);
+    }
 
-    } 
-
-    ctx.write_set_.pop_back();
     page = ctx.write_set_.back().AsMut<BPlusTreePage>();
   }
-  
+
   // (void)ctx;
 }
 

@@ -156,9 +156,24 @@ class BPlusTree {
   auto IndexBinarySearchLeaf(LeafPage *page, const KeyType &key) -> int;
 
   /**
-   * 获取BPlusTreePage类型的某个index位置的值的函数
+   * 向左sibling结点借用键值的函数
    */
-  auto ValueAt(const BPlusTreePage *page, int index) -> page_id_t;
+  void BorrowFromLeft(BPlusTreePage *page, BPlusTreePage *left_page, BPlusTreePage *parent_page, int index);
+
+  /**
+   * 向右sibling结点借用键值的函数
+   */
+  void BorrowFromRight(BPlusTreePage *page, BPlusTreePage *right_page, BPlusTreePage *parent_page, int index);
+
+  /**
+   * 与左sibling结点合并的函数
+   */
+  void MergeWithLeft(BPlusTreePage *page, BPlusTreePage *left_page, BPlusTreePage *parent_page, int index);
+
+  /**
+   * 与右sibling结点合并的函数
+   */
+  void MergeWithRight(BPlusTreePage *page, BPlusTreePage *right_page, BPlusTreePage *parent_page, int index);
 
   // member variable
   std::string index_name_;

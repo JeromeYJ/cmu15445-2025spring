@@ -45,6 +45,7 @@ TEST(BPlusTreeTests, DeleteTestNoIterator) {
     index_key.SetFromInteger(key);
     tree.Insert(index_key, rid);
   }
+  // std::cout << tree.DrawBPlusTree() << std::endl;
 
   std::vector<RID> rids;
   for (auto key : keys) {
@@ -61,7 +62,9 @@ TEST(BPlusTreeTests, DeleteTestNoIterator) {
   for (auto key : remove_keys) {
     index_key.SetFromInteger(key);
     tree.Remove(index_key);
+    // std::cout << tree.DrawBPlusTree() << std::endl;
   }
+  // std::cout << tree.DrawBPlusTree() << std::endl;
 
   int64_t size = 0;
   bool is_present;
@@ -82,6 +85,7 @@ TEST(BPlusTreeTests, DeleteTestNoIterator) {
   }
   EXPECT_EQ(size, 1);
 
+  // std::cout << tree.DrawBPlusTree() << std::endl;
   // Remove the remaining key
   index_key.SetFromInteger(2);
   tree.Remove(index_key);
