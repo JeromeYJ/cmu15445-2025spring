@@ -43,7 +43,7 @@ TEST(BPlusTreeTests, BasicScaleTest) {  // NOLINT
   GenericKey<8> index_key;
   RID rid;
 
-  int64_t scale = 22;
+  int64_t scale = 5000;
   std::vector<int64_t> keys(scale);
   std::iota(keys.begin(), keys.end(), 1);
 

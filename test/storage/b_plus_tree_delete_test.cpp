@@ -57,12 +57,13 @@ TEST(BPlusTreeTests, DeleteTestNoIterator) {
     int64_t value = key & 0xFFFFFFFF;
     EXPECT_EQ(rids[0].GetSlotNum(), value);
   }
+  // std::cout << tree.DrawBPlusTree() << std::endl;
 
   std::vector<int64_t> remove_keys = {1, 5, 3, 4};
   for (auto key : remove_keys) {
     index_key.SetFromInteger(key);
     tree.Remove(index_key);
-    // std::cout << tree.DrawBPlusTree() << std::endl;
+    std::cout << tree.DrawBPlusTree() << std::endl;
   }
   // std::cout << tree.DrawBPlusTree() << std::endl;
 
@@ -95,7 +96,7 @@ TEST(BPlusTreeTests, DeleteTestNoIterator) {
   delete bpm;
 }
 
-TEST(BPlusTreeTests, DISABLED_SequentialEdgeMixTest) {  // NOLINT
+TEST(BPlusTreeTests, SequentialEdgeMixTest) {  // NOLINT
   // create KeyComparator and index schema
   auto key_schema = ParseCreateStatement("a bigint");
   GenericComparator<8> comparator(key_schema.get());
@@ -145,6 +146,7 @@ TEST(BPlusTreeTests, DISABLED_SequentialEdgeMixTest) {  // NOLINT
       tree.Remove(index_key);
       deleted.push_back(key);
       inserted.erase(std::find(inserted.begin(), inserted.end(), key));
+      // std::cout << tree.DrawBPlusTree() << std::endl;
       res = TreeValuesMatch<GenericKey<8>, RID, GenericComparator<8>>(tree, inserted, deleted);
       ASSERT_TRUE(res);
     }

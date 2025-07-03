@@ -119,7 +119,8 @@ void BPLUSTREE_TYPE::BorrowFromLeft(BPlusTreePage *page, BPlusTreePage *left_pag
     auto leaf_page = static_cast<LeafPage *>(page);
     auto left_leaf_page = static_cast<LeafPage *>(left_page);
 
-    for (int i = 0; i < size; i++) {
+    // 从左边开始遍历移动还是从右边，一定要想清楚，不然会出错！
+    for (int i = size - 1; i >= 0; i--) {
       leaf_page->SetKeyAt(i + 1, leaf_page->KeyAt(i));
       leaf_page->SetValueAt(i + 1, leaf_page->ValueAt(i));
     }
@@ -132,7 +133,7 @@ void BPLUSTREE_TYPE::BorrowFromLeft(BPlusTreePage *page, BPlusTreePage *left_pag
     auto internal_page = static_cast<InternalPage *>(page);
     auto left_internal_page = static_cast<InternalPage *>(left_page);
 
-    for (int i = 0; i < size; i++) {
+    for (int i = size - 1; i >= 0; i--) {
       if (i > 0) {
         internal_page->SetKeyAt(i + 1, internal_page->KeyAt(i));
       }
@@ -226,12 +227,7 @@ void BPLUSTREE_TYPE::MergeWithLeft(BPlusTreePage *page, BPlusTreePage *left_page
     parent_internal_page->SetKeyAt(i, parent_internal_page->KeyAt(i + 1));
     parent_internal_page->SetValueAt(i, parent_internal_page->ValueAt(i + 1));
   }
-  // 当parent_size为2时，再减一后其实已经不存在key，则实际size为0
-  if (parent_size == 2) {
-    parent_internal_page->SetSize(0);
-  } else {
-    parent_internal_page->SetSize(parent_size - 1);
-  }
+  parent_internal_page->SetSize(parent_size - 1);
 }
 
 /**
@@ -258,6 +254,7 @@ void BPLUSTREE_TYPE::MergeWithRight(BPlusTreePage *page, BPlusTreePage *right_pa
     auto internal_page = static_cast<InternalPage *>(page);
     auto right_internal_page = static_cast<InternalPage *>(right_page);
     KeyType middle_key = parent_internal_page->KeyAt(index + 1);
+    // 之前对于size的设置出现了问题，导致出现了size为0的情况进行key的设置，触发了exception
     internal_page->SetKeyAt(size, middle_key);
     internal_page->SetValueAt(size, right_internal_page->ValueAt(0));
     for (int i = 1; i < right_size; i++) {
@@ -272,12 +269,7 @@ void BPLUSTREE_TYPE::MergeWithRight(BPlusTreePage *page, BPlusTreePage *right_pa
     parent_internal_page->SetKeyAt(i, parent_internal_page->KeyAt(i + 1));
     parent_internal_page->SetValueAt(i, parent_internal_page->ValueAt(i + 1));
   }
-  // 当parent_size为2时，再减一后其实已经不存在key，则实际size为0
-  if (parent_size == 2) {
-    parent_internal_page->SetSize(0);
-  } else {
-    parent_internal_page->SetSize(parent_size - 1);
-  }
+  parent_internal_page->SetSize(parent_size - 1);
 }
 
 /*****************************************************************************
@@ -653,8 +645,17 @@ void BPLUSTREE_TYPE::Remove(const KeyType &key) {
     // 如果此时结点为root结点
     if (ctx.write_set_.size() == 1) {
       auto root_page = ctx.write_set_.back().AsMut<BPlusTreePage>();
-      // 如果此时root结点为空，则将原root结点删除，且修改root结点的page id
-      if (root_page->GetSize() == 0) {
+      // 如果root结点为叶子结点，则单独处理。如果root不为空，则直接return，如果为空，则重新设置root page id
+      if (root_page->IsLeafPage()) {
+        if (root_page->GetSize() == 0) {
+          auto header_page = ctx.header_page_->AsMut<BPlusTreeHeaderPage>();
+          header_page->root_page_id_ = INVALID_PAGE_ID;
+        }
+        return;
+      }
+      // 如果此时root结点为内部结点且为空，则将原root结点删除，且修改root结点的page id
+      // size为1时，没有key存在，只有一个value，此时root为不合法状态，同样需要删除
+      if (root_page->GetSize() <= 1) {
         ctx.write_set_.pop_back();
         bpm_->DeletePage(ctx.root_page_id_);
         auto header_page = ctx.header_page_->AsMut<BPlusTreeHeaderPage>();
@@ -727,6 +728,8 @@ void BPLUSTREE_TYPE::Remove(const KeyType &key) {
       bpm_->DeletePage(page_id);
     }
 
+    // 之前漏了这句，出现了很严重的bug，导致读取的page id错误，由此导致了递归加锁的情况
+    ctx.indexes_.pop_back();
     page = ctx.write_set_.back().AsMut<BPlusTreePage>();
   }
 
