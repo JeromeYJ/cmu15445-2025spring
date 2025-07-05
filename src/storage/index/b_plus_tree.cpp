@@ -209,6 +209,9 @@ void BPLUSTREE_TYPE::MergeWithLeft(BPlusTreePage *page, BPlusTreePage *left_page
     }
     // 随时记得更新结点的size
     left_leaf_page->SetSize(left_size + size);
+    // 要记得更新next_page_id ！很容易漏
+    // 在迭代器部分会检测这里是否正确进行了更新
+    left_leaf_page->SetNextPageId(leaf_page->GetNextPageId());
   } else {
     auto internal_page = static_cast<InternalPage *>(page);
     auto left_internal_page = static_cast<InternalPage *>(left_page);
@@ -250,6 +253,9 @@ void BPLUSTREE_TYPE::MergeWithRight(BPlusTreePage *page, BPlusTreePage *right_pa
     }
     // 随时记得更新结点的size
     leaf_page->SetSize(right_size + size);
+    // 要记得更新next_page_id ！很容易漏
+    // 在迭代器中会检测这里是否更新
+    leaf_page->SetNextPageId(right_leaf_page->GetNextPageId());
   } else {
     auto internal_page = static_cast<InternalPage *>(page);
     auto right_internal_page = static_cast<InternalPage *>(right_page);
@@ -625,7 +631,7 @@ void BPLUSTREE_TYPE::Remove(const KeyType &key) {
     return;
   }
 
-  // 统一先将对应的key删除
+  // 统一先将对应的key和value删除
   int size = page->GetSize();
   auto leaf_page = static_cast<LeafPage *>(page);
   for (int i = delete_index; i < size - 1; i++) {
@@ -745,7 +751,29 @@ void BPLUSTREE_TYPE::Remove(const KeyType &key) {
  * @return : index iterator
  */
 INDEX_TEMPLATE_ARGUMENTS
-auto BPLUSTREE_TYPE::Begin() -> INDEXITERATOR_TYPE { return INDEXITERATOR_TYPE(); }
+auto BPLUSTREE_TYPE::Begin() -> INDEXITERATOR_TYPE {
+  Context ctx;
+
+  ReadPageGuard guard = bpm_->ReadPage(header_page_id_);
+  auto head_page = guard.As<BPlusTreeHeaderPage>();
+  ctx.root_page_id_ = head_page->root_page_id_;
+  guard.Drop();
+
+  if (ctx.root_page_id_ == INVALID_PAGE_ID) {
+    return INDEXITERATOR_TYPE(bpm_, ReadPageGuard(), -1);
+  }
+
+  // 找到最左侧的叶子结点
+  ReadPageGuard page_guard = bpm_->ReadPage(ctx.root_page_id_);
+  auto page = page_guard.As<BPlusTreePage>();
+  while (!page->IsLeafPage()) {
+    auto internal_page = static_cast<const InternalPage *>(page);
+    page_id_t page_id = internal_page->ValueAt(0);
+    page_guard = bpm_->ReadPage(page_id);
+    page = page_guard.As<BPlusTreePage>();
+  }
+  return INDEXITERATOR_TYPE(bpm_, std::move(page_guard), 0);
+}
 
 /*
  * Input parameter is low key, find the leaf page that contains the input key
@@ -753,7 +781,34 @@ auto BPLUSTREE_TYPE::Begin() -> INDEXITERATOR_TYPE { return INDEXITERATOR_TYPE()
  * @return : index iterator
  */
 INDEX_TEMPLATE_ARGUMENTS
-auto BPLUSTREE_TYPE::Begin(const KeyType &key) -> INDEXITERATOR_TYPE { return INDEXITERATOR_TYPE(); }
+auto BPLUSTREE_TYPE::Begin(const KeyType &key) -> INDEXITERATOR_TYPE {
+  Context ctx;
+
+  ReadPageGuard guard = bpm_->ReadPage(header_page_id_);
+  auto head_page = guard.As<BPlusTreeHeaderPage>();
+  ctx.root_page_id_ = head_page->root_page_id_;
+  guard.Drop();
+
+  if (ctx.root_page_id_ == INVALID_PAGE_ID) {
+    return INDEXITERATOR_TYPE(bpm_, ReadPageGuard(), -1);
+  }
+
+  ReadPageGuard page_guard = bpm_->ReadPage(ctx.root_page_id_);
+  auto page = page_guard.As<BPlusTreePage>();
+  while (!page->IsLeafPage()) {
+    int index = KeyBinarySearch(page, key);
+    auto internal_page = static_cast<const InternalPage *>(page);
+    page_id_t page_id = internal_page->ValueAt(index);
+    page_guard = bpm_->ReadPage(page_id);
+    page = page_guard.As<BPlusTreePage>();
+  }
+  // 当前结点为叶子结点时
+  int index = KeyBinarySearch(page, key);
+  if (index == -1) {
+    return INDEXITERATOR_TYPE(bpm_, ReadPageGuard(), -1);
+  }
+  return INDEXITERATOR_TYPE(bpm_, std::move(page_guard), index);
+}
 
 /*
  * Input parameter is void, construct an index iterator representing the end
@@ -761,7 +816,7 @@ auto BPLUSTREE_TYPE::Begin(const KeyType &key) -> INDEXITERATOR_TYPE { return IN
  * @return : index iterator
  */
 INDEX_TEMPLATE_ARGUMENTS
-auto BPLUSTREE_TYPE::End() -> INDEXITERATOR_TYPE { return INDEXITERATOR_TYPE(); }
+auto BPLUSTREE_TYPE::End() -> INDEXITERATOR_TYPE { return INDEXITERATOR_TYPE(bpm_, ReadPageGuard(), -1); }
 
 /**
  * @return Page id of the root of this tree

@@ -105,7 +105,7 @@ auto ReadPageGuard::operator=(ReadPageGuard &&that) noexcept -> ReadPageGuard & 
   if (this == &that) {
     return *this;
   }
-  Drop();  // 这一行容易漏，是在vector的erase函数test中发现的问题，很难找到
+  Drop();  // 这一行容易漏，是在vector的erase函数test中发现的问题，很难找到。主要是Drop函数中会更新pin_count等信息
   page_id_ = that.page_id_;
   frame_ = std::move(that.frame_);
   replacer_ = std::move(that.replacer_);
