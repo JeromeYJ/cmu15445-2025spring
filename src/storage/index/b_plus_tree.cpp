@@ -164,7 +164,7 @@ void BPLUSTREE_TYPE::BorrowFromRight(BPlusTreePage *page, BPlusTreePage *right_p
 
     leaf_page->SetKeyAt(size, right_leaf_page->KeyAt(0));
     leaf_page->SetValueAt(size, right_leaf_page->ValueAt(0));
-    for (int i = 0; i < right_size; i++) {
+    for (int i = 0; i < right_size - 1; i++) {
       right_leaf_page->SetKeyAt(i, right_leaf_page->KeyAt(i + 1));
       right_leaf_page->SetValueAt(i, right_leaf_page->ValueAt(i + 1));
     }
