@@ -310,8 +310,9 @@ auto BPLUSTREE_TYPE::GetValue(const KeyType &key, std::vector<ValueType> *result
     }
     auto internal_page = static_cast<const InternalPage *>(page);
     page_id_t page_id = internal_page->ValueAt(index);
-    page_guard = bpm_->ReadPage(page_id);
-    page = page_guard.As<BPlusTreePage>();
+    ctx.read_set_.push_back(bpm_->ReadPage(page_id));
+    page = ctx.read_set_.back().As<BPlusTreePage>();
+    ctx.read_set_.pop_front();
   }
 
   /* 当前结点为叶子结点时 */

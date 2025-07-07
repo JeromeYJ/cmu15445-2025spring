@@ -222,7 +222,12 @@ auto BufferPoolManager::DeletePage(page_id_t page_id) -> bool {
  * page's data.
  */
 auto BufferPoolManager::CheckedWritePage(page_id_t page_id, AccessType access_type) -> std::optional<WritePageGuard> {
-  std::unique_lock lk(*bpm_latch_);
+  // std::unique_lock lk(*bpm_latch_);
+  // 由于主要涉及直接的加解锁操作，不使用unique_lock进行管理了
+  bpm_latch_->lock();
+
+  // std::cout << "Thread " << std::this_thread::get_id()
+  //         << " locked bpm_latch_ " << "try to lock " << page_id << std::endl;
 
   // (1) 对应page不在buffer pool中
   if (page_table_.find(page_id) == page_table_.end()) {
@@ -256,9 +261,11 @@ auto BufferPoolManager::CheckedWritePage(page_id_t page_id, AccessType access_ty
     // replacer_->RecordAccess(frame_id);
     // replacer_->SetEvictable(frame_id, false);
 
-    if (!TestWriteLock(frame_id)) {
-      lk.unlock();
-    }
+    // if (!TestWriteLock(frame_id)) {
+    //   lk.unlock();
+    //   std::cout << "Thread " << std::this_thread::get_id()
+    //       << " unlocked " << "bpm_latch_" << std::endl;
+    // }
     // 这里的shared_ptr参数都不能move，不然buffer pool manager对象某些成员就无了
     return WritePageGuard(page_id, frames_[frame_id], replacer_, bpm_latch_);
   }
@@ -271,9 +278,12 @@ auto BufferPoolManager::CheckedWritePage(page_id_t page_id, AccessType access_ty
   // replacer_->RecordAccess(frame_id);
   // replacer_->SetEvictable(frame_id, false);
 
-  if (!TestWriteLock(frame_id)) {
-    lk.unlock();
-  }
+  // 之前使用的TestWriteLock这段导致了死锁，具体原因与锁释放后等待线程并不一定会立马获得锁相关
+  // if (!TestWriteLock(frame_id)) {
+  //   lk.unlock();
+  //   std::cout << "Thread " << std::this_thread::get_id()
+  //         << " unlocked " << "bpm_latch_" << std::endl;
+  // }
   return WritePageGuard(page_id, frames_[frame_id], replacer_, bpm_latch_);
 }
 
@@ -302,7 +312,8 @@ auto BufferPoolManager::CheckedWritePage(page_id_t page_id, AccessType access_ty
  * returns `std::nullopt`, otherwise returns a `ReadPageGuard` ensuring shared and read-only access to a page's data.
  */
 auto BufferPoolManager::CheckedReadPage(page_id_t page_id, AccessType access_type) -> std::optional<ReadPageGuard> {
-  std::unique_lock lk(*bpm_latch_);
+  // std::unique_lock lk(*bpm_latch_);
+  bpm_latch_->lock();
 
   // (1) 对应page不在buffer pool中
   if (page_table_.find(page_id) == page_table_.end()) {
@@ -338,9 +349,9 @@ auto BufferPoolManager::CheckedReadPage(page_id_t page_id, AccessType access_typ
     // replacer_->RecordAccess(frame_id);
     // replacer_->SetEvictable(frame_id, false);
 
-    if (!TestReadLock(frame_id)) {
-      lk.unlock();
-    }
+    // if (!TestReadLock(frame_id)) {
+    //   lk.unlock();
+    // }
     // 这里的shared_ptr参数都不能move，不然buffer pool manager对象某些成员就无了
     return ReadPageGuard(page_id, frames_[frame_id], replacer_, bpm_latch_);
   }
@@ -353,9 +364,9 @@ auto BufferPoolManager::CheckedReadPage(page_id_t page_id, AccessType access_typ
   // replacer_->SetEvictable(frame_id, false);
 
   // 避免死锁
-  if (!TestReadLock(frame_id)) {
-    lk.unlock();
-  }
+  // if (!TestReadLock(frame_id)) {
+  //   lk.unlock();
+  // }
   return ReadPageGuard(page_id, frames_[frame_id], replacer_, bpm_latch_);
 }
 
@@ -513,9 +524,18 @@ auto BufferPoolManager::TestWriteLock(frame_id_t frame_id) -> bool {
   if (frames_[frame_id]->rwlatch_.try_lock()) {
     // try_lock()会获得锁，所以要记得unlock()
     frames_[frame_id]->rwlatch_.unlock();
+
+    // debug
+    // if (frame_id == 0) {
+    //   std::cout << "rwlock is accessiable, bpm_latch is still locked" << std::endl;
+    // }
     return true;
   }
 
+  // debug
+  // if (frame_id == 0) {
+  //   std::cout << "rwlock is not accessiable, bpm_latch will be unlocked" << std::endl;
+  // }
   return false;
 
   // bpm_latch_->unlock();

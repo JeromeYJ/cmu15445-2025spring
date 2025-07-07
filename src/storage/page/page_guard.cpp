@@ -41,6 +41,7 @@ ReadPageGuard::ReadPageGuard(page_id_t page_id, std::shared_ptr<FrameHeader> fra
       replacer_(std::move(replacer)),
       bpm_latch_(std::move(bpm_latch)),
       is_valid_(true) {
+  bpm_latch_->unlock();
   frame_->rwlatch_.lock_shared();
   frame_->pin_count_++;
   frame_->page_id_ = page_id;
@@ -192,7 +193,11 @@ WritePageGuard::WritePageGuard(page_id_t page_id, std::shared_ptr<FrameHeader> f
       bpm_latch_(std::move(bpm_latch)),
       is_valid_(true) {
   frame_->is_dirty_ = true;
+  // 在p2中进行并发测试的时候发现的bug，应当直接在rwlatch加锁前解锁bpm_latch_
+  bpm_latch_->unlock();
   frame_->rwlatch_.lock();
+  // std::cout << "Thread " << std::this_thread::get_id()
+  //         << " locked " << page_id << std::endl;
   frame_->pin_count_++;
   frame_->page_id_ = page_id;
   replacer_->RecordAccess(frame_->frame_id_);
@@ -315,6 +320,8 @@ void WritePageGuard::Drop() {
   }
 
   frame_->rwlatch_.unlock();
+  // std::cout << "Thread " << std::this_thread::get_id()
+  //         << " unlocked " << page_id_ << std::endl;
   is_valid_ = false;
   replacer_ = nullptr;
   frame_ = nullptr;
