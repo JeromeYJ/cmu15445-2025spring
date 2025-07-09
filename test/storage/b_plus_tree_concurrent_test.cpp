@@ -159,6 +159,12 @@ void InsertTest1Call() {
     for (auto iter = tree.Begin(); iter != tree.End(); ++iter) {
       const auto &pair = *iter;
       auto location = pair.second;
+      // std::cout << " slotnum: " << location.GetSlotNum() << std::endl;
+
+      // ++iter;
+      // const auto &pair1 = *iter;
+      // auto location1 = pair1.second;
+      // std::cout << " slotnum next: " << location1.GetSlotNum() << std::endl;
       ASSERT_EQ(location.GetPageId(), 0);
       ASSERT_EQ(location.GetSlotNum(), current_key);
       current_key = current_key + 1;
@@ -201,6 +207,7 @@ void InsertTest2Call() {
     for (auto key : keys) {
       rids.clear();
       index_key.SetFromInteger(key);
+      // std::cout << key << std::endl;
       tree.GetValue(index_key, &rids);
       ASSERT_EQ(rids.size(), 1);
 

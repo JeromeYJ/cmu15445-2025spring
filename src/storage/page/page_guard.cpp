@@ -43,13 +43,13 @@ ReadPageGuard::ReadPageGuard(page_id_t page_id, std::shared_ptr<FrameHeader> fra
       is_valid_(true) {
   bpm_latch_->unlock();
   frame_->rwlatch_.lock_shared();
-  frame_->pin_count_++;
-  frame_->page_id_ = page_id;
+  // frame_->pin_count_++;
+  // frame_->page_id_ = page_id;
   // 记得更新 replacer_ 中 LRU-K 历史信息
   // 这个更新的位置要在这里，在外面会出现还没有访问到该页面，就修改了replacer_中LRU-K队列的情况
   // 不过好像放外面也不影响测试
-  replacer_->RecordAccess(frame_->frame_id_);
-  replacer_->SetEvictable(frame_->frame_id_, false);
+  // replacer_->RecordAccess(frame_->frame_id_);
+  // replacer_->SetEvictable(frame_->frame_id_, false);
 }
 
 /**
@@ -156,10 +156,14 @@ void ReadPageGuard::Drop() {
     return;
   }
 
+  // 这里要记得对buffer pool manager中的数据结构进行多线程保护！
+  bpm_latch_->lock();
   frame_->pin_count_--;
   if (frame_->pin_count_.load() == 0) {
     replacer_->SetEvictable(frame_->frame_id_, true);
   }
+  bpm_latch_->unlock();
+
   frame_->rwlatch_.unlock_shared();
   is_valid_ = false;
   replacer_ = nullptr;
@@ -192,16 +196,16 @@ WritePageGuard::WritePageGuard(page_id_t page_id, std::shared_ptr<FrameHeader> f
       replacer_(std::move(replacer)),
       bpm_latch_(std::move(bpm_latch)),
       is_valid_(true) {
-  frame_->is_dirty_ = true;
   // 在p2中进行并发测试的时候发现的bug，应当直接在rwlatch加锁前解锁bpm_latch_
   bpm_latch_->unlock();
   frame_->rwlatch_.lock();
+  frame_->is_dirty_ = true;
   // std::cout << "Thread " << std::this_thread::get_id()
   //         << " locked " << page_id << std::endl;
-  frame_->pin_count_++;
-  frame_->page_id_ = page_id;
-  replacer_->RecordAccess(frame_->frame_id_);
-  replacer_->SetEvictable(frame_->frame_id_, false);
+  // frame_->pin_count_++;
+  // frame_->page_id_ = page_id;
+  // replacer_->RecordAccess(frame_->frame_id_);
+  // replacer_->SetEvictable(frame_->frame_id_, false);
 }
 
 /**
@@ -314,10 +318,13 @@ void WritePageGuard::Drop() {
     return;
   }
 
+  // 这里同样需要保护buffer pool manager中的数据结构，需要修改的地方就要进行多线程保护
+  bpm_latch_->lock();
   frame_->pin_count_--;
   if (frame_->pin_count_.load() == 0) {
     replacer_->SetEvictable(frame_->frame_id_, true);
   }
+  bpm_latch_->unlock();
 
   frame_->rwlatch_.unlock();
   // std::cout << "Thread " << std::this_thread::get_id()

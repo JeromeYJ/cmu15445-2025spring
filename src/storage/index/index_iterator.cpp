@@ -24,6 +24,7 @@ auto INDEXITERATOR_TYPE::IsEnd() -> bool { return index_ == -1; }
 INDEX_TEMPLATE_ARGUMENTS
 auto INDEXITERATOR_TYPE::operator*() -> std::pair<const KeyType &, const ValueType &> {
   auto leaf_page = page_guard_.As<B_PLUS_TREE_LEAF_PAGE_TYPE>();
+  // std::cout << "page_id: " << page_guard_.GetPageId() << " index: " << index_ << std::endl;
   std::pair<const KeyType &, const ValueType &> result(leaf_page->KeyAt(index_), leaf_page->ValueAt(index_));
   return result;
 }
